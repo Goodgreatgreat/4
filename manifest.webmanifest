@@ -1,0 +1,25 @@
+{
+  "id": "./",
+  "name": "我的股票紀錄",
+  "short_name": "股票紀錄",
+  "description": "在手機本機保存台股與美股交易紀錄的個人股票紀錄工具。",
+  "lang": "zh-TW",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f5f3ee",
+  "theme_color": "#173f35",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": [
+    "finance",
+    "productivity"
+  ]
+}

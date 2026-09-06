@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">我的股票紀錄</title>
+  <desc id="description">深綠底色上的珊瑚紅股票走勢與紀錄線條</desc>
+  <rect width="512" height="512" rx="112" fill="#173f35"/>
+  <path d="M112 352V160c0-26 22-48 48-48h192c26 0 48 22 48 48v192c0 26-22 48-48 48H160c-26 0-48-22-48-48Z" fill="#fffdf9"/>
+  <path d="M160 316 218 258l50 39 83-105" fill="none" stroke="#ef684f" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M307 192h44v44" fill="none" stroke="#ef684f" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M160 354h192" fill="none" stroke="#173f35" stroke-width="20" stroke-linecap="round" opacity=".25"/>
+</svg>
