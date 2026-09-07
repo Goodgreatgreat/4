@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#f7f4ee">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="description" content="一款資料只存於裝置中的個人股票交易紀錄工具。">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://api.tiingo.com; img-src 'self' data:; style-src 'self'; script-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://api.tiingo.com https://*.workers.dev; img-src 'self' data:; style-src 'self'; script-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <title>我的股票紀錄</title>
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="manifest" href="manifest.webmanifest">
@@ -26,6 +26,11 @@
         本機
       </div>
     </header>
+    <div class="account-toolbar">
+      <label for="account-select">記帳帳戶<select id="account-select" aria-label="記帳帳戶"></select></label>
+      <button type="button" class="secondary-button secondary-button--small" id="combined-view" aria-pressed="false">合併檢視</button>
+      <span id="account-scope-note" role="status"></span>
+    </div>
 
     <main id="main-content" tabindex="-1">
       <section class="page-view is-active" id="view-entry" data-view-panel="entry" aria-labelledby="entry-heading">
@@ -63,6 +68,14 @@
               <option value="NVDA">NVIDIA</option>
               <option value="AAPL">Apple</option>
             </datalist>
+            <p class="instrument-preview" id="trade-name-preview" role="status" aria-live="polite">輸入股票代號後，這裡會顯示名稱與商品類型。</p>
+          </div>
+
+          <div class="field" id="trade-category-wrap">
+            <label for="trade-category">買入分類</label>
+            <select id="trade-category" name="category">
+              <option value="">未分類</option>
+            </select>
           </div>
 
           <div class="field-grid">
@@ -84,8 +97,11 @@
             </div>
           </div>
 
+          <details class="return-formula"><summary>補登日期／同日順序（選填）</summary>
+            <div class="field-grid"><div class="field"><label for="trade-date">成交日期</label><input type="date" id="trade-date"></div><div class="field"><label for="trade-order">當日順序</label><input type="number" id="trade-order" min="0.001" step="any" placeholder="預設排最後，可用 1.5 插入"></div></div>
+          </details>
           <button class="primary-button" id="trade-submit" type="submit">
-            <span>記錄這筆交易</span>
+            <span>記錄這筆買入</span>
             <span aria-hidden="true">→</span>
           </button>
           <p class="form-message" id="trade-feedback" role="status" aria-live="polite"></p>
@@ -98,17 +114,36 @@
             <p class="section-kicker">PORTFOLIO</p>
             <h2 id="holdings-heading">目前持股</h2>
           </div>
-          <button class="secondary-button secondary-button--small" id="refresh-us-prices" type="button" hidden>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7"/></svg>
-            更新美股價格
-          </button>
+          <div class="quote-actions">
+            <button class="secondary-button secondary-button--small" id="refresh-tw-prices" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7"/></svg>
+              更新台股價格
+            </button>
+            <button class="secondary-button secondary-button--small" id="refresh-us-prices" type="button" hidden>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7"/></svg>
+              更新美股價格
+            </button>
+          </div>
         </div>
 
+        <div class="quote-meta" id="tw-quote-meta" aria-live="polite" hidden>
+          <span><span class="meta-dot" aria-hidden="true"></span>台股資料日期：<time id="tw-price-asof">尚未更新</time></span>
+          <span>來源：<a href="https://openapi.twse.com.tw/" target="_blank" rel="noopener noreferrer">證交所</a>／<a href="https://www.tpex.org.tw/openapi/" target="_blank" rel="noopener noreferrer">櫃買中心</a>每日收盤價</span>
+        </div>
         <div class="quote-meta" id="us-quote-meta" aria-live="polite" hidden>
           <span><span class="meta-dot" aria-hidden="true"></span>資料日期：<time id="us-price-asof">尚未更新</time></span>
           <span>來源：<a id="us-price-source" href="https://www.tiingo.com/" target="_blank" rel="noopener noreferrer">Tiingo EOD</a></span>
         </div>
         <p class="form-message quote-feedback" id="quote-feedback" role="status" aria-live="polite"></p>
+
+        <div class="stock-filter-bar">
+          <label for="holding-stock-filter">尋找持股</label>
+          <select id="holding-stock-filter">
+            <option value="">全部股票</option>
+          </select>
+        </div>
+
+        <section class="allocation-overview" id="allocation-overview" aria-label="持股分類圓餅圖" aria-live="polite" hidden></section>
 
         <div class="holding-list" id="holding-list"></div>
 
@@ -120,6 +155,13 @@
           <p class="section-kicker">LEDGER</p>
           <h2 id="records-heading">交易、股息與換匯</h2>
           <p>交易會從「記一筆」自動進來；股息與換匯可在這裡新增、修改或刪除。</p>
+        </div>
+
+        <div class="stock-filter-bar stock-filter-bar--records">
+          <label for="record-stock-filter">尋找股票紀錄</label>
+          <select id="record-stock-filter">
+            <option value="">全部股票</option>
+          </select>
         </div>
 
         <div class="record-tabs" role="tablist" aria-label="選擇紀錄類型">
@@ -355,9 +397,21 @@
         </div>
 
         <div class="period-switch" role="group" aria-label="選擇報表期間">
-          <button class="is-active" type="button" data-report-period="month" aria-pressed="true">本月</button>
-          <button type="button" data-report-period="year" aria-pressed="false">今年</button>
+          <button class="is-active" type="button" data-report-period="month" aria-pressed="true">月份</button>
+          <button type="button" data-report-period="year" aria-pressed="false">年份</button>
           <button type="button" data-report-period="all" aria-pressed="false">全部</button>
+        </div>
+
+        <div class="report-period-controls" aria-label="指定報表年月">
+          <div class="field" id="report-month-control">
+            <label for="report-month">選擇月份</label>
+            <input type="month" id="report-month" name="report-month">
+          </div>
+          <div class="field" id="report-year-control" hidden>
+            <label for="report-year">選擇年份</label>
+            <input type="number" id="report-year" name="report-year" min="1900" max="2200" step="1" inputmode="numeric" placeholder="年份">
+          </div>
+          <p id="report-period-label" aria-live="polite">目前顯示：本月</p>
         </div>
 
         <div class="report-grid">
@@ -383,6 +437,27 @@
           </article>
         </div>
 
+        <details class="return-formula" id="return-formula">
+          <summary>總報酬率怎麼算？</summary>
+          <div>
+            <p>月份／年份的「已售成本報酬率」＝該期間已實現交易損益 ÷ 該期間賣出配對成本。股息另列，不混入今天的持股價差。</p>
+            <p>全部期間的「累計簡單報酬率」＝（累計已實現交易損益＋淨股息＋目前未實現損益）÷（累計賣出配對成本＋目前持股成本）。這是成本口徑，重複進出會重複累計成本，並非年化。</p>
+            <p>台股 TWD、美股 USD 分開；缺價不以 0 或成本代替。尚無歷史期初／期末估值，所以不提供歷史月份的總資產報酬率。</p>
+          </div>
+        </details>
+
+        <section class="settings-card" aria-labelledby="annualized-heading">
+          <h3 id="annualized-heading">投資部位年化績效</h3>
+          <p>自開始記錄至目前；不跟隨上方月份篩選。依所選帳戶計算，合併時重新合計現金流。</p>
+          <div class="report-grid" id="annualized-results" aria-live="polite"></div>
+          <details class="return-formula"><summary>年化規則、範圍與限制</summary><div>
+            <p>採資金加權報酬率（XIRR）：買入金額含費用為負流量；賣出淨收入、現金股息為正流量；仍持有的股票加上目前估計市值。使用實際日期與 365 日年基礎。</p>
+            <p>求 r，使 Σ 現金流 ÷ (1+r)^(距首筆天數/365) = 0。不足一年主顯示期間資金加權報酬率；展開才顯示短期年化換算。現金流反覆正負交替可能無唯一解，程式不任選一個答案。</p>
+            <p>這是股票部位績效，不包含閒置現金與匯兌損益，不是含現金整個帳戶的年化。整體帳戶年化另需完整入出金與期初現金，目前未啟用。不得把各股年化取平均。</p>
+            <p>價格使用各股最近可用收盤價，並非同時點即時估值。請補齊歷史交易、淨股息和分割事件；資料不完整仍會影響結果。台美市場以原幣分算，不拿今天匯率回填歷史。</p>
+            <p><a href="https://help.portfolio-performance.info/en/concepts/performance/money-weighted/" target="_blank" rel="noopener noreferrer">績效計算參考說明</a></p>
+          </div></details>
+        </section>
         <article class="stock-history-card">
           <div>
             <span class="card-label">個股歷史</span>
@@ -392,6 +467,27 @@
         </article>
       </section>
 
+      <section class="page-view" id="view-assets" data-view-panel="assets" aria-labelledby="assets-heading" hidden>
+        <div class="section-heading"><p class="section-kicker">ASSET ALLOCATION</p><h2 id="assets-heading">總資產配置</h2><p>股票依市值、現金與其他資產依你填寫的最新餘額。只在這一頁提供目標比例提醒。</p></div>
+        <article class="settings-card"><h3>已記錄資產估值</h3><strong id="asset-total">—</strong><p id="asset-completeness" role="status"></p><div id="asset-pie"></div></article>
+        <details class="settings-card"><summary>更新現金、其他資產與估值匯率</summary>
+          <p>這是目前餘額快照，不會因買賣或換匯紀錄自動加減。請定期與銀行／券商對帳，股票勿重複填入。</p>
+          <form id="asset-form"><input id="asset-id" type="hidden"><div class="field-grid">
+            <div class="field"><label for="asset-name">資產名稱</label><input id="asset-name" required maxlength="60" placeholder="台幣活存、美元交割戶…"></div>
+            <div class="field"><label for="asset-category">配置類別</label><select id="asset-category"><option>現金</option><option>債券</option><option>其他</option><option>台股</option><option>美股</option></select></div>
+            <div class="field"><label for="asset-currency">幣別</label><select id="asset-currency"><option>TWD</option><option>USD</option></select></div>
+            <div class="field"><label for="asset-value">目前金額</label><input id="asset-value" type="number" min="0" step="any" inputmode="decimal" required></div>
+            <div class="field"><label for="asset-date">餘額日期</label><input id="asset-date" type="date" required></div>
+          </div><button class="secondary-button" type="submit">儲存資產餘額</button><button class="text-button" type="button" id="asset-cancel">取消編輯</button></form>
+          <div id="asset-list"></div>
+          <form id="valuation-fx-form"><h3>總資產估值匯率</h3><p>請填永豐銀行查到的美元即期買入價（美元換回台幣），或自行選定估值匯率。本版未自動連接銀行；此值不會改寫歷史換匯紀錄或年化。</p><div class="field-grid"><div class="field"><label for="valuation-fx">1 USD = TWD</label><input id="valuation-fx" type="number" min="0.0001" step="any" required></div><div class="field"><label for="valuation-fx-date">匯率日期</label><input id="valuation-fx-date" type="date" required></div></div><button class="secondary-button" type="submit">更新估值匯率</button></form>
+        </details>
+        <article class="settings-card"><h3>我想要的配置比例</h3><p>以下範例未依你的財務狀況個人化推薦，請依投資期限、現金需求與可承受波動修改。調整金額未計費稅，不是下單指令。</p>
+          <div class="field"><label for="allocation-example">載入範例草稿（台股／美股／債券／現金）</label><select id="allocation-example"><option value="">自行設定</option><option value="20,20,40,20">範例 A：20／20／40／20</option><option value="20,40,30,10">範例 B：20／40／30／10</option><option value="30,50,15,5">範例 C：30／50／15／5</option></select></div>
+          <form id="allocation-form"><div id="allocation-target-fields" class="field-grid"></div><div class="field"><label for="allocation-tolerance">容許偏差（百分點）</label><input id="allocation-tolerance" type="number" min="0" max="100" step="any" value="5" required></div><button class="secondary-button" type="submit">套用我的目標比例</button></form>
+          <div id="allocation-advice" aria-live="polite"></div><p id="asset-feedback" class="form-message" role="status"></p>
+        </article>
+      </section>
       <section class="page-view" id="view-settings" data-view-panel="settings" aria-labelledby="settings-heading" hidden>
         <div class="section-heading">
           <p class="section-kicker">SETTINGS</p>
@@ -399,6 +495,8 @@
           <p>先設定常用券商與分類，之後記交易就不用反覆輸入。</p>
         </div>
 
+        <article class="settings-card"><h3>帳戶管理</h3><p>原有紀錄放在「原有帳戶」。新增後用上方選單切換；合併只改畫面，不混用成本或移動紀錄。</p><form id="account-form"><div class="field"><label for="account-name">新帳戶名稱</label><input id="account-name" required maxlength="40" placeholder="例如：永豐交割戶、另一個美股帳戶"></div><button class="secondary-button" type="submit">新增帳戶</button></form></article>
+        <article class="settings-card"><h3>股票分割／反向分割</h3><p>用於既有持股股數變動，總成本不變。請先核對券商通知，歷史分割不會自動補入。</p><form id="split-form"><div class="field-grid"><div class="field"><label for="split-symbol">股票代號</label><input id="split-symbol" required></div><div class="field"><label for="split-date">生效日</label><input id="split-date" type="date" required></div><div class="field"><label for="split-factor">新股數 ÷ 原股數</label><input id="split-factor" type="number" min="0.000001" step="any" required placeholder="一拆二填 2；十合一填 0.1"></div><div class="field"><label for="split-order">當日順序</label><input id="split-order" type="number" min="0.001" step="any" value="0.5" required></div></div><button class="secondary-button" type="submit">記錄分割事件</button><p id="split-feedback" class="form-message" role="status"></p></form></article>
         <article class="settings-card broker-card" id="broker-settings">
           <div class="settings-card__heading">
             <div class="service-logo service-logo--broker" aria-hidden="true">券</div>
@@ -408,15 +506,28 @@
             </div>
           </div>
 
-          <div class="field broker-select-field">
-            <div class="label-row">
-              <label for="default-broker">預設券商</label>
-              <button class="text-button" id="manage-brokers" type="button">新增／編輯券商</button>
+          <div class="broker-market-selectors">
+            <div class="field broker-select-field">
+              <div class="label-row">
+                <label for="default-broker-tw">台股預設券商</label>
+                <button class="text-button" id="manage-brokers" type="button">新增／編輯台股券商</button>
+              </div>
+              <select id="default-broker-tw" name="default-broker-tw">
+                <option value="sinopac">永豐金證券</option>
+                <option value="custom">自訂券商</option>
+              </select>
+              <p class="field-help">輸入台股代號後會比對官方商品資料，ETF 賣出會自動改用 ETF 證交稅率。</p>
             </div>
-            <select id="default-broker" name="default-broker">
-              <option value="sinopac">永豐金證券</option>
-              <option value="custom">自訂券商</option>
-            </select>
+            <div class="field broker-select-field">
+              <div class="label-row">
+                <label for="default-broker-us">美股預設券商</label>
+                <button class="text-button" id="manage-us-brokers" type="button">新增／編輯美股券商</button>
+              </div>
+              <select id="default-broker-us" name="default-broker-us">
+                <option value="sinopac">永豐金證券</option>
+                <option value="custom">自訂券商</option>
+              </select>
+            </div>
           </div>
 
           <div class="fee-summary" id="broker-fee-summary" aria-label="目前費稅摘要">
@@ -424,6 +535,10 @@
             <div><span>最低手續費</span><strong data-field="tw-min-fee-summary">NT$20</strong></div>
             <div><span>股票證交稅</span><strong data-field="tw-stock-tax-summary">0.3%</strong></div>
             <div><span>ETF／當沖稅</span><strong data-field="tw-etf-day-tax-summary">0.1%／0.15%</strong></div>
+            <div><span>美股每筆手續費</span><strong data-field="us-fee-summary">依券商設定</strong></div>
+            <div><span>美股最低手續費</span><strong data-field="us-min-fee-summary">US$0</strong></div>
+            <div><span>美股賣出費／交易稅</span><strong data-field="us-sell-fee-summary">依券商設定</strong></div>
+            <div><span>美股賣出最低費</span><strong data-field="us-sell-min-fee-summary">US$0</strong></div>
           </div>
 
           <details class="settings-disclosure" id="broker-fee-advanced">
@@ -461,6 +576,43 @@
               <p class="field-help">費率會作為預設試算值；券商實際收費或活動優惠不同時，可在交易紀錄中修正。</p>
             </div>
           </details>
+
+          <details class="settings-disclosure" id="us-broker-fee-advanced">
+            <summary>進階調整美股手續費與交易稅</summary>
+            <div class="disclosure-body">
+              <div class="field">
+                <label for="us-fee-mode">每筆手續費模式</label>
+                <select id="us-fee-mode" name="us-fee-mode">
+                  <option value="fixed">每筆固定</option>
+                  <option value="per-share">每股計費</option>
+                  <option value="percent">成交金額百分比</option>
+                </select>
+              </div>
+              <div class="field-grid field-grid--records">
+                <div class="field">
+                  <label for="us-fee-rate">手續費率或金額</label>
+                  <input type="number" id="us-fee-rate" name="us-fee-rate" min="0" step="any" inputmode="decimal" placeholder="0">
+                </div>
+                <div class="field">
+                  <label for="us-min-fee">最低手續費（USD）</label>
+                  <input type="number" id="us-min-fee" name="us-min-fee" min="0" step="any" inputmode="decimal" placeholder="0">
+                </div>
+                <div class="field">
+                  <label for="us-sell-fee-rate">賣出費／交易稅率（%）</label>
+                  <input type="number" id="us-sell-fee-rate" name="us-sell-fee-rate" min="0" step="any" inputmode="decimal" placeholder="0">
+                </div>
+                <div class="field">
+                  <label for="us-sell-min-fee">賣出最低費（USD）</label>
+                  <input type="number" id="us-sell-min-fee" name="us-sell-min-fee" min="0" step="any" inputmode="decimal" placeholder="0">
+                  <label for="us-additional-fixed">額外每筆費（USD）</label><input id="us-additional-fixed" type="number" min="0" step="any" value="0">
+                  <label for="us-additional-share">額外每股費（USD）</label><input id="us-additional-share" type="number" min="0" step="any" value="0">
+                  <label for="us-sell-share">賣出每股稅費（USD）</label><input id="us-sell-share" type="number" min="0" step="any" value="0">
+                </div>
+              </div>
+              <button class="secondary-button secondary-button--full" id="us-broker-fee-save" type="button">儲存美股費稅設定</button>
+              <p class="field-help">各美股券商的佣金、平台費及賣出監管費不同，可依對帳單設定；交易紀錄仍可逐筆修正。</p>
+            </div>
+          </details>
           <p class="form-message" id="broker-feedback" role="status" aria-live="polite"></p>
         </article>
 
@@ -487,6 +639,8 @@
             <label class="secondary-button file-button" for="import-data">匯入</label>
             <input class="sr-only" type="file" id="import-data" accept="application/json,.json">
           </div>
+          <button type="button" class="text-button" id="restore-pre-import">還原最近一次匯入前快照</button>
+          <p>資料只在此瀏覽器；清除網站資料或更換手機會遺失。請定期匯出到安全位置。公版請勿上傳自己的備份。</p>
           <p class="form-message" id="backup-feedback" role="status" aria-live="polite"></p>
         </article>
 
@@ -529,6 +683,7 @@
                     </button>
                   </div>
                   <p class="field-help" id="tiingo-token-help">Token 只存在這台裝置，不會上傳到 GitHub，也不是你的永豐或其他券商密碼。</p>
+                  <label for="tiingo-relay">選用：自有 Cloudflare Worker 中繼網址</label><input id="tiingo-relay" type="url" placeholder="https://你的中繼.workers.dev"><button id="save-relay" class="text-button" type="button">儲存中繼設定</button><p>GitHub Pages 直接連 Tiingo 可能受跨網域限制。可依 README 自行部署 optional/tiingo-relay.js；不要使用陌生人提供的中繼，它會接收到你的 Token。中繼不接收帳務資料。</p>
                 </div>
 
                 <label class="check-row" for="tiingo-auto-update">
@@ -569,6 +724,7 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 17 5-5 4 3 7-8"/><path d="M15 7h5v5"/></svg>
         <span>報表</span>
       </button>
+      <button class="nav-item" type="button" data-view="assets" aria-controls="view-assets"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9h9A9 9 0 1 1 12 3Z"/></svg><span>總資產</span></button>
       <button class="nav-item" type="button" data-view="settings" aria-controls="view-settings">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 9 19.37a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.63 15 1.7 1.7 0 0 0 3.08 14H3v-4h.08A1.7 1.7 0 0 0 4.63 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.63 1.7 1.7 0 0 0 10 3.08V3h4v.08A1.7 1.7 0 0 0 15 4.63a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.37 9 1.7 1.7 0 0 0 20.92 10H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z"/></svg>
         <span>設定</span>
@@ -591,6 +747,8 @@
         <div class="field">
           <label for="trade-edit-date">成交日期</label>
           <input type="date" id="trade-edit-date" name="date" required>
+          <label for="trade-edit-order">當日順序（可用 1.5 插入第 1 與 2 筆間）</label><input id="trade-edit-order" type="number" min="0.001" step="any" required>
+          <label for="trade-edit-account">所屬帳戶</label><select id="trade-edit-account"></select>
         </div>
         <div class="field">
           <label for="trade-edit-market">市場</label>
@@ -625,6 +783,7 @@
           <select id="trade-edit-asset-type" name="assetType" required>
             <option value="stock">股票</option>
             <option value="etf">ETF</option>
+            <option value="bondetf">符合停徵資格的被動債券 ETF（依交易日期）</option>
             <option value="dayTrade">當沖</option>
           </select>
         </div>
@@ -644,6 +803,7 @@
       <div class="field-grid field-grid--records">
         <div class="field">
           <label for="trade-edit-fee">手續費</label>
+          <label for="trade-edit-fee-policy">費稅處理方式</label><select id="trade-edit-fee-policy"><option value="keep">保留畫面上的實付費稅</option><option value="recalculate">依目前券商設定重新計算費稅</option></select>
           <input type="number" id="trade-edit-fee" name="fee" min="0" step="any" inputmode="decimal" placeholder="0">
         </div>
         <div class="field">
@@ -719,6 +879,11 @@
         </div>
         <button class="dialog-close" id="category-dialog-close" type="button" aria-label="關閉分類管理">×</button>
       </div>
+
+      <aside class="signal-explainer">
+        <strong>分類提醒</strong>
+        <p>每個分類可設定獲利、虧損報酬率，以及單日上漲、下跌幅門檻；任何一項達標時，相關持股卡會變黃色提醒你。提醒不會自動下單。</p>
+      </aside>
 
       <div class="category-list" id="category-list" aria-live="polite">
         <div class="category-row" data-category-id="core"><span>核心配置</span><button type="button" data-action="delete-category" aria-label="刪除核心配置分類">刪除</button></div>
@@ -797,6 +962,16 @@
           <div class="field">
             <label for="broker-us-min-fee">最低費（USD）</label>
             <input type="number" id="broker-us-min-fee" name="usMinFee" min="0" step="any" inputmode="decimal" placeholder="0">
+          </div>
+        </div>
+        <div class="field-grid field-grid--records">
+          <div class="field">
+            <label for="broker-us-sell-fee-rate">賣出費／交易稅率（%）</label>
+            <input type="number" id="broker-us-sell-fee-rate" name="usSellFeeRate" min="0" step="any" inputmode="decimal" placeholder="0">
+          </div>
+          <div class="field">
+            <label for="broker-us-sell-min-fee">賣出最低費（USD）</label>
+            <input type="number" id="broker-us-sell-min-fee" name="usSellMinFee" min="0" step="any" inputmode="decimal" placeholder="0">
           </div>
         </div>
       </section>

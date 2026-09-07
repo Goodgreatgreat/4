@@ -84,15 +84,23 @@ export async function validateTiingoToken(token, options = {}) {
 }
 
 /**
- * Fetch the latest completed EOD raw close for a US stock/ETF.
+ * Fetch recent completed EOD raw closes for a US stock/ETF, then return the
+ * latest close and its change from the preceding trading day.
  *
- * @returns {{symbol: string, close: number, date: string, source: string, fetchedAt: string}}
+ * @returns {{symbol: string, close: number, date: string, change: number|null,
+ *            changePercent: number|null, source: string, fetchedAt: string}}
  */
 export async function fetchLatestTiingoClose(symbol, token, options = {}) {
   const normalizedSymbol = normalizeTiingoSymbol(symbol);
   const normalizedToken = normalizeTiingoToken(token);
+  const fetchedAt = getFetchedAt(options.now);
+  const endDate = fetchedAt.slice(0, 10);
+  const start = new Date(`${endDate}T00:00:00.000Z`);
+  start.setUTCDate(start.getUTCDate() - 10);
+  const startDate = start.toISOString().slice(0, 10);
+  const query = new URLSearchParams({ startDate, endDate });
   const response = await requestTiingo(
-    `/tiingo/daily/${encodeURIComponent(normalizedSymbol)}/prices`,
+    `/tiingo/daily/${encodeURIComponent(normalizedSymbol)}/prices?${query}`,
     normalizedToken,
     options,
   );
@@ -115,30 +123,46 @@ export async function fetchLatestTiingoClose(symbol, token, options = {}) {
   }
 
   const latest = validRows.at(-1);
+  const previous = validRows.length >= 2 ? validRows.at(-2) : null;
+  const previousClose = previous && latest.splitFactor > 0 ? previous.close / latest.splitFactor : null;
+  const change = previousClose === null ? null : latest.close - previousClose;
+  const changePercent = previousClose === null ? null : (change / previousClose) * 100;
   return {
     symbol: normalizedSymbol,
     close: latest.close,
     date: latest.date,
+    change,
+    changePercent,
     source: TIINGO_SOURCE,
-    fetchedAt: getFetchedAt(options.now),
+    fetchedAt,
+    splits: validRows.filter((row) => row.splitFactor !== 1 && row.splitFactor > 0).map((row) => ({ date: row.date, factor: row.splitFactor })),
+    splitFactor: latest.splitFactor,
   };
 }
 
-async function requestTiingo(path, token, { fetchImpl = globalThis.fetch, signal } = {}) {
+export function normalizeRelayUrl(value = '') {
+  if (!String(value).trim()) return '';
+  const url = new URL(String(value).trim());
+  if (url.protocol !== 'https:' || !url.hostname.endsWith('.workers.dev') || url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new TiingoError('中繼請使用你自行部署的 https://名稱.workers.dev 網址，不含路徑。', { code: 'INVALID_RELAY' });
+  return url.origin;
+}
+
+async function requestTiingo(path, token, { fetchImpl = globalThis.fetch, signal, relayUrl = '' } = {}) {
   if (typeof fetchImpl !== "function") {
     throw new TiingoError("此瀏覽器不支援網路查價。", { code: "FETCH_UNAVAILABLE" });
   }
 
   let response;
   try {
-    response = await fetchImpl(`${TIINGO_API_BASE_URL}${path}`, {
+    response = await fetchImpl(`${normalizeRelayUrl(relayUrl) || TIINGO_API_BASE_URL}${path}`, {
       method: "GET",
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
         Authorization: `Token ${token}`,
       },
-      signal,
+      signal: signal || AbortSignal.timeout(15000),
+      cache: 'no-store',
     });
   } catch (error) {
     if (error?.name === "AbortError") {
@@ -226,7 +250,8 @@ function parsePriceRow(row) {
   if (!Number.isFinite(close) || close <= 0 || !Number.isFinite(timestamp)) return null;
 
   const date = new Date(timestamp).toISOString().slice(0, 10);
-  return { close, date, timestamp };
+  const factor = row.splitFactor === undefined ? 1 : Number(row.splitFactor);
+  return { close, date, timestamp, splitFactor: Number.isFinite(factor) && factor > 0 ? factor : null };
 }
 
 function malformedResponseError(status = null) {

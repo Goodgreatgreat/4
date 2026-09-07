@@ -2,7 +2,7 @@
  * 每次發佈有靜態檔案變更的版本時，請更新 SHELL_VERSION。
  * 新的 Service Worker 會先建立新快取，再於啟用時移除舊版本。
  */
-const SHELL_VERSION = "2026-09-06-2";
+const SHELL_VERSION = "2026-09-07-2";
 const CACHE_PREFIX = "stock-journal-shell-";
 const CACHE_NAME = `${CACHE_PREFIX}${SHELL_VERSION}`;
 
@@ -14,8 +14,10 @@ const SHELL_URLS = [
   new URL("./styles.css", self.registration.scope).href,
   new URL("./app.js", self.registration.scope).href,
   new URL("./ledger.js", self.registration.scope).href,
+  new URL("./performance.js", self.registration.scope).href,
   new URL("./storage.js", self.registration.scope).href,
   new URL("./tiingo.js", self.registration.scope).href,
+  new URL("./tw-quotes.js", self.registration.scope).href,
   new URL("./icon.svg", self.registration.scope).href,
   new URL("./manifest.webmanifest", self.registration.scope).href,
 ];
@@ -52,7 +54,7 @@ self.addEventListener("install", (event) => {
           }),
         ),
       )
-      .then(() => self.skipWaiting()),
+      ,
   );
 });
 
@@ -113,7 +115,9 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (request.mode === "navigate") {
-    event.respondWith(networkFirstNavigation(request));
+    // Keep HTML and modules from the same installed version. A newly installed
+    // worker activates after old app tabs close, avoiding mixed schemas/UI.
+    event.respondWith(cacheFirstShell(new Request(INDEX_URL)));
     return;
   }
 

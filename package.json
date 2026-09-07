@@ -1,0 +1,10 @@
+{
+  "name": "personal-stock-journal",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node --check app.js && node --check ledger.js && node --check storage.js && node --check tiingo.js && node --check tw-quotes.js && node --check scripts/update-tw-quotes.mjs && node --check sw.js",
+    "test": "node --test tests/*.test.mjs"
+  }
+}

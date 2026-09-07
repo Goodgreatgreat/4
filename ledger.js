@@ -33,7 +33,7 @@ export const DEFAULT_TAIWAN_TAX_RATES = Object.freeze({
 
 const MARKET_CURRENCY = Object.freeze({ TW: "TWD", US: "USD" });
 const ROUNDING_METHODS = new Set(["round", "floor", "ceil", "none"]);
-const ASSET_TYPES = new Set(["stock", "etf", "dayTrade"]);
+const ASSET_TYPES = new Set(["stock", "etf", "bondetf", "dayTrade"]);
 const CALCULATION_DECIMALS = 10;
 
 export class LedgerValidationError extends Error {
@@ -151,6 +151,7 @@ function normalizeEntryType(value, details) {
     return "cashDividend";
   }
   if (["stockdividend", "股票股利", "股票股息"].includes(normalized)) return "stockDividend";
+  if (normalized === 'split') return 'split';
   fail("type 必須是 trade、cashDividend 或 stockDividend", details);
 }
 
@@ -261,7 +262,10 @@ export function calculateTradeFee({ market, price, shares, feeOverride, settings
     min: 0,
     details: { field: "settings.minimumFee" },
   });
-  return applyRounding(Math.max(baseFee, minimumFee), decimals, rounding);
+  const additional = normalizedMarket === 'US'
+    ? finiteNumber(merged.additionalFixedFee ?? 0, '額外每筆費', { min: 0 }) + shares * finiteNumber(merged.additionalPerShareFee ?? 0, '額外每股費', { min: 0 })
+    : 0;
+  return applyRounding(Math.max(baseFee, minimumFee) + additional, decimals, rounding);
 }
 
 /** 台股證交稅：僅賣出計算；可用 taxOverride 明確覆寫（包含 0）。 */
@@ -275,6 +279,7 @@ export function calculateTaiwanSecuritiesTax({
   rates = DEFAULT_TAIWAN_TAX_RATES,
   taxDecimals = 0,
   taxRounding = "round",
+  date,
 }) {
   const normalizedMarket = normalizeMarket(market);
   const normalizedSide = normalizeSide(side, { field: "side" });
@@ -291,7 +296,9 @@ export function calculateTaiwanSecuritiesTax({
 
   requireObject(rates, "rates", { field: "rates" });
   const normalizedAssetType = normalizeAssetType(assetType, { field: "assetType" });
-  const rate = finiteNumber(rates[normalizedAssetType], `${normalizedAssetType} 稅率`, {
+  const rate = finiteNumber(normalizedAssetType === 'bondetf'
+    ? (date && date >= '2017-01-01' && date <= '2026-12-31' ? 0 : (rates.etf ?? 0.001))
+    : rates[normalizedAssetType], `${normalizedAssetType} 稅率`, {
     min: 0,
     max: 1,
     details: { field: `rates.${normalizedAssetType}` },
@@ -325,6 +332,7 @@ function snapshot(position, decimals) {
     market: position.market,
     currency: position.currency,
     symbol: position.symbol,
+    accountId: position.accountId,
     shares,
     costBasis,
     averageCost: shares === 0 ? 0 : roundTo(position.costBasis / position.shares, decimals.averageCost),
@@ -495,8 +503,10 @@ export function processLedger(entries, options = {}) {
     const type = normalizeEntryType(entry.type, { ...details, field: "type" });
     const market = normalizeMarket(entry.market);
     const symbol = normalizeSymbol(entry.symbol, { ...details, field: "symbol" });
-    const positionKey = `${market}:${symbol}`;
+    const accountId = String(entry.accountId || 'default');
+    const positionKey = JSON.stringify([accountId, market, symbol]);
     const position = positions.get(positionKey) ?? emptyPosition(market, symbol);
+    position.accountId = accountId;
     const rawId = entry.id ?? `entry-${inputIndex + 1}`;
     if (typeof rawId !== "string" || rawId.trim() === "") {
       fail("id 必須是非空白字串", { ...details, field: "id" });
@@ -516,6 +526,7 @@ export function processLedger(entries, options = {}) {
       market,
       currency: MARKET_CURRENCY[market],
       symbol,
+      accountId,
       _grossAmount: 0,
       _fee: 0,
       _tax: 0,
@@ -542,17 +553,27 @@ export function processLedger(entries, options = {}) {
         feeOverride: entry.feeOverride,
         settings: feeSettings,
       });
-      const tax = calculateTaiwanSecuritiesTax({
-        market,
-        side,
-        price,
-        shares,
-        assetType,
-        taxOverride: entry.taxOverride,
-        rates: normalized.taiwanTaxRates,
-        taxDecimals: normalized.taxDecimals,
-        taxRounding: normalized.taxRounding,
-      });
+      const tax = market === "TW"
+        ? calculateTaiwanSecuritiesTax({
+            market,
+            side,
+            price,
+            shares,
+            assetType,
+            taxOverride: entry.taxOverride,
+            rates: normalized.taiwanTaxRates,
+            taxDecimals: normalized.taxDecimals,
+            taxRounding: normalized.taxRounding,
+            date,
+          })
+        : side === "sell"
+          ? clean(
+              optionalNonNegative(entry.taxOverride, "taxOverride", {
+                ...details,
+                field: "taxOverride",
+              }) ?? 0,
+            )
+          : 0;
       const grossAmount = clean(price * shares);
       let allocatedCost = 0;
       let realizedTradingPnl = 0;
@@ -664,6 +685,11 @@ export function processLedger(entries, options = {}) {
         _realizedPnl: netAmount,
         _returnRate: returnRate,
       };
+    } else if (type === 'split') {
+      const factor = positiveNumber(entry.factor, 'factor', details);
+      if (position.shares <= 0) fail('分割當日此帳戶沒有持股', { ...details, code: 'NO_SPLIT_POSITION' });
+      position.shares = clean(position.shares * factor);
+      result = { ...result, factor, shares: 0 };
     } else {
       const shares = positiveNumber(entry.shares, "shares", { ...details, field: "shares" });
       position.shares = clean(position.shares + shares);
