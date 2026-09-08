@@ -1,0 +1,31 @@
+import {calculate,performance,quoteKey,usable,today} from './book.js';
+import {reportRange,realizedReport,periodPerformance,priorDate} from './period.js';
+export function resultView(u){
+  const {entries,stock,mode,period,start,end,field,esc,cash,pct,metric,tone,choices}=u;
+  const selectedEntries=entries.filter(e=>!stock||quoteKey(e)===stock);
+  const name=choices.find(([k])=>k===stock)?.[1]||stock;
+  const controls=`<section class="report-controls" aria-label="成果篩選">${field('看哪一檔？','report-stock','text',stock,[['','全部股票（台美分開）'],...choices])}<div class="report-dates">${field('回顧期間','report-mode','text',mode,[['month','按月份'],['year','按年份'],['range','自訂起訖日'],['all','全部期間']])}${mode==='all'?'':mode==='range'?`${field('開始日期','report-start','date',start)}${field('結束日期','report-end','date',end)}`:field(mode==='month'?'選擇月份':'選擇年份','report-period',mode==='month'?'month':'number',period)}</div></section>`;
+  const heading=`<div class="page-heading"><div><span class="eyebrow">回頭看自己的投資</span><h1>我的投資成果</h1><p>${stock?esc(name):'先選股票，再選想回顧的時間。'}</p></div></div>`;
+  let range;try{range=reportRange(mode,period,start,end,selectedEntries);}catch(e){return heading+controls+`<p class="error" role="alert">${esc(e.message)}</p>`;}
+  const full=calculate(selectedEntries),markets=stock?[stock.slice(0,2)]:['TW','US'];
+  const contents=markets.map(m=>{
+    const report=realizedReport(selectedEntries.filter(e=>e.market===m),stock,range.start,range.end);
+    const annual=performance(full,m,u.quotes);
+    let specific='';
+    if(stock){
+      const key=JSON.stringify([stock,range.start,range.end]),manual=u.prices[key]||{},q=u.quotes[stock],valuations={...manual};
+      if(!valuations.opening&&q?.date===priorDate(range.start)&&usable(q))valuations.opening=q;
+      if(!valuations.ending&&usable(q)&&(q.date===range.end||range.end===today()))valuations.ending=q;
+      const r=periodPerformance(selectedEntries,stock,range.start,range.end,valuations);
+      const pricePart=(side,label,date,quantity)=>quantity?`<fieldset class="boundary-price"><legend>${label} · ${quantity.toLocaleString('zh-TW',{maximumFractionDigits:6})} 股</legend><p class="meta">估值基準 ${date}；休市請填此前最近交易日的收盤價與日期。</p><div class="row">${field('每股收盤價',side+'-price','number',valuations[side]?.close??'')}${field('股價日期',side+'-date','date',valuations[side]?.date||date)}</div></fieldset>`:'';
+      specific=`<div class="summary-grid period-summary">${metric('這段期間的資金加權報酬',r.reason?'待補資料／無法計算':pct(r.period),esc(r.reason||'依投入及回收日期換算，不是年化'),r.period)}${metric('這段期間的含市值損益',r.profit===undefined?'尚缺歷史股價':cash(r.profit,m),'期末市值 − 期初市值 ＋ 賣出／股息淨收入 − 買入支出',r.profit)}</div>${r.reason?`<p class="warning">${esc(r.reason)}</p>`:`<p class="meta">有效現金流日期 ${esc(r.flowStart)} 至 ${esc(r.flowEnd)}。清倉後的空倉時間不假設繼續投資。${r.days>=365?`此段年化 XIRR ${pct(r.rate)}。`:''}</p>${r.days<365?`<details class="more"><summary>此段短期年化換算</summary><p>${pct(r.rate)}；短期外推，不代表未來收益。</p></details>`:''}`}
+        ${r.opening||r.closing?`<details class="more"${r.missing.length?' open':''}><summary>${r.missing.length?'補齊區間股價，算含庫存報酬':'核對區間使用的股價'}</summary><p class="meta">僅有最近行情，歷史價不會自動猜測。手填價只用於本次區間試算，不改成交價或現行行情；離開網站後不保留。</p><form data-form="period-prices">${pricePart('opening','期初',r.openingDate,r.opening)}${pricePart('ending','期末',range.end,r.closing)}<p class="error" data-error role="alert" hidden></p><button class="secondary" type="submit">套用股價並試算</button></form></details>`:''}
+        ${r.opening&&valuations.opening?`<p class="meta">期初價 ${esc(valuations.opening.close)} · ${esc(valuations.opening.date)} · ${esc(valuations.opening.source||'手動')}</p>`:''}${r.closing&&valuations.ending?`<p class="meta">期末價 ${esc(valuations.ending.close)} · ${esc(valuations.ending.date)} · ${esc(valuations.ending.source||'手動')}。${valuations.ending.date!==range.end?'非區間最後一日行情，結果為最近可用價估算。':''}</p>`:''}`;
+    }
+    const actual=`<div class="summary-grid">${metric('期間已實現損益',cash(report.realized,m),'依完整交易歷史配對成本，含費稅',report.realized)}${metric('期間實收股息',cash(report.dividend,m),'以實際入帳日期計入',report.dividend)}${metric('期間已售成本報酬率',report.cost?pct(report.realized/report.cost):'尚無賣出','已實現損益 ÷ 本期賣出配對成本',report.realized)}</div>`;
+    const lifetime=`<details class="more"><summary>${stock?'這檔股票':'此市場'}自開始記錄以來的年化</summary><p>${annual.reason?esc(annual.reason):annual.days>=365?`年化 XIRR <strong class="${tone(annual.rate)}">${pct(annual.rate)}</strong>`:`未滿一年：期間資金加權報酬 <strong class="${tone(annual.period)}">${pct(annual.period)}</strong>`}</p><p class="meta">此欄不隨期間篩選；${annual.start?`${esc(annual.start)} 至 ${esc(annual.end)}。`:''}僅股票部位，不含閒置現金或匯兌。${annual.quoteDates?.length?'估值股價日期 '+annual.quoteDates.map(esc).join('、'):''}</p></details>`;
+    const rows=stock?`<details class="more"><summary>這段期間的操作紀錄（${report.rows.length} 筆）</summary>${report.rows.slice().reverse().map(e=>`<article class="record"><span class="meta">${esc(e.date)} · ${esc(u.accountName(e.account))}</span><strong>${esc(({buy:'買入',sell:'賣出',cash:'股息',stock:'配股',split:'分割'})[e.kind])} ${e.kind==='cash'?cash(e.amount,m):e.kind==='split'?'×'+e.factor:esc(e.quantity)+' 股'}</strong>${e.kind==='sell'?`<p class="${tone(e.pnl)}">已實現 ${cash(e.pnl,m)} · 此筆 ${pct(e.returnRate)}</p>`:''}<button class="text-link" type="button" data-edit="${esc(e.id)}">查看／修改</button></article>`).join('')||'<p class="empty">這段期間沒有操作紀錄；持股期間仍可能有漲跌。</p>'}</details>`:'';
+    return `<section class="panel results-panel"><h2>${stock?esc(name):m==='TW'?'台股 · 台幣':'美股 · 美元'}</h2><p class="range-label">${range.start} — ${range.end}</p>${specific}${stock?`<details class="more" open><summary>已實現與股息明細</summary>${actual}</details>`:actual}${lifetime}${rows}</section>`;
+  }).join('');
+  return heading+controls+contents+`<details class="panel"><summary>報酬率怎麼算？</summary><p>已售報酬率只計所選期間賣出的淨損益，除以其配對成本；期初已持有的股票仍沿用完整歷史加權成本，不會因篩選日期歸零。股息另外呈現。</p><p>個股區間資金加權報酬：期初持股以開始日前收盤價估值作負現金流，區間買入支出為負、賣出淨收入及淨股息為正，期末持股市值為正。先以實際日期及 365 日基礎計算 XIRR，再換算成有效現金流期間報酬（1 + XIRR）^(日數 / 365) − 1。它不是單純股價漲跌，也不是嚴格時間加權報酬。</p><p>起訖日的交易均計入；期初市值是起始日前一天收盤。清倉後不假設資金繼續投資，同日完成、無投入或多解風險時不提供單一 XIRR。缺少歷史估值不能用今日價格取代。分割／配股紀錄需補齊，否則股數與報酬會失真。</p><p>全部股票視圖分台幣／美元呈現；要看區間含庫存報酬，請先選一檔股票。合併帳戶仍各自配對成本，再合計現金流。</p><p><a href="https://help.portfolio-performance.info/en/concepts/performance/money-weighted/" target="_blank" rel="noopener noreferrer">資金加權報酬計算概念</a></p></details>`;
+}

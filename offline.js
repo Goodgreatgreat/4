@@ -1,6 +1,6 @@
 const PREFIX='slow-notebook-shell-'+self.registration.scope;
-const CACHE=PREFIX+'v1';
-const FILES=['./','./index.html','./ui.css','./main.js','./book.js','./panels.js','./network.js','./symbols.js','./mark.svg','./manifest.json','./data/taiwan.json'];
+const CACHE=PREFIX+'v2';
+const FILES=['./','./index.html','./ui.css','./main.js','./book.js','./period.js','./results.js','./panels.js','./network.js','./symbols.js','./mark.svg','./manifest.json','./data/taiwan.json'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES))));
 // Updates activate after all old tabs close, so modules cannot mix versions.
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith(PREFIX)&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
