@@ -1,8 +1,12 @@
 const PREFIX='slow-notebook-shell-'+self.registration.scope;
-const CACHE=PREFIX+'v2';
-const FILES=['./','./index.html','./ui.css','./main.js','./book.js','./period.js','./results.js','./panels.js','./network.js','./symbols.js','./mark.svg','./manifest.json','./data/taiwan.json'];
+const CACHE=PREFIX+'v3';
+const FILES=['./','./index.html','./ui.css','./main.js','./updates.js','./book.js','./period.js','./results.js','./panels.js','./network.js','./symbols.js','./mark.svg','./manifest.json','./data/taiwan.json'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES))));
-// Updates activate after all old tabs close, so modules cannot mix versions.
+// Wait normally. Only an explicit user update action activates early.
+self.addEventListener('message',event=>{
+  if(event.data?.type!=='ACTIVATE_UPDATE')return;
+  try{const source=new URL(event.source.url),base=new URL(self.registration.scope);if(source.origin===base.origin&&source.pathname.startsWith(base.pathname))event.waitUntil(self.skipWaiting());}catch{}
+});
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith(PREFIX)&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',event=>{
   const request=event.request,url=new URL(request.url),base=new URL(self.registration.scope);
@@ -12,6 +16,6 @@ self.addEventListener('fetch',event=>{
   // Only public application files and public quotes are cached. Never Token/API responses.
   const cacheKey=new URL(path,base).href;
   if(path==='data/taiwan.json'){
-    event.respondWith(fetch(request).then(async response=>{if(!response.ok)throw Error('offline');const c=await caches.open(CACHE);await c.put(cacheKey,response.clone());return response;}).catch(()=>caches.match(cacheKey).then(r=>r||Response.error())));
-  }else event.respondWith(caches.match(cacheKey).then(r=>r||fetch(request)));
+    event.respondWith(fetch(request).then(async response=>{if(!response.ok)throw Error('offline');const c=await caches.open(CACHE);await c.put(cacheKey,response.clone());return response;}).catch(()=>caches.open(CACHE).then(cache=>cache.match(cacheKey)).then(r=>r||Response.error())));
+  }else event.respondWith(caches.open(CACHE).then(cache=>cache.match(cacheKey)).then(r=>r||fetch(request)));
 });

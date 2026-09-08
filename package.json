@@ -1,1 +1,1 @@
-{"name":"slow-stock-notebook","version":"1.1.0","private":true,"type":"module","scripts":{"dev":"node tools/serve.mjs","test":"node --test tests/*.test.mjs","build":"node tools/build.mjs","quotes":"node tools/quotes.mjs"}}
+{"name":"slow-stock-notebook","version":"1.2.0","private":true,"type":"module","scripts":{"dev":"node tools/serve.mjs","test":"node --test tests/*.test.mjs","build":"node tools/build.mjs","quotes":"node tools/quotes.mjs"}}

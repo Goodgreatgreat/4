@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <title>慢慢記 · 更新程式畫面</title><link rel="stylesheet" href="ui.css">
+</head>
+<body><main class="shell"><section class="paper">
+  <span class="eyebrow">版本 1.2.0 · 統一上傳版</span><h1>更新程式，不清除帳本</h1>
+  <p>確認 GitHub 已成功發布後，再使用這裡。這只更新本網站的離線程式快取，不會刪除交易紀錄、Token、備份或其他網站的資料。</p>
+  <p>更新前先匯出帳本備份，並儲存、關閉其他開著本網站的分頁，避免未送出的輸入遺失。</p>
+  <p id="repair-status" role="status">請在你的 GitHub Pages 網站開啟此頁；不要直接雙擊本機 HTML。</p>
+  <p><button id="repair-update" class="primary" type="button">更新程式畫面並回到記帳</button></p>
+  <p><a href="./#entry">不更新，回到記帳</a></p>
+</section></main><script type="module" src="update-page.js"></script></body>
+</html>
