@@ -1,6 +1,6 @@
 # 以後只上傳這個資料夾的內容
 
-唯一資料夾：`慢慢記-手機與個股成果版`。目前版本 **1.2.0 · 統一上傳版**。
+唯一資料夾：`慢慢記-手機與個股成果版`。目前版本 **1.3.0 · 自動行情與分類提醒版**。
 
 今後程式修改直接在這裡進行，不再另外交付「全新版本」或 ZIP。電腦檔案不會自己同步到 GitHub；每次修改完成後，仍由你把這個資料夾內的內容上傳。上傳成功並發布後，網站才更新。
 
@@ -50,16 +50,16 @@ tw-quotes.js
 儲存庫最外層/
   index.html
   main.js、book.js、period.js、results.js、其他程式檔
-  ui.css、offline.js、updates.js
+  ui.css、offline.js、updates.js、quote-status.js、fx.js
   update.html、update-page.js、update-utils.js
   package.json
   .github/
     workflows/
       pages.yml
   data/
-    taiwan.json
+    taiwan.json、fx.json
   tools/
-    build.mjs、quotes.mjs、serve.mjs
+    build.mjs、quotes.mjs、twse.mjs、fx.mjs、serve.mjs
   tests/
     所有 .test.mjs
   optional/
@@ -82,13 +82,13 @@ tw-quotes.js
 
 ## 第五步：更新舊畫面，不清除帳本
 
-發布成功後開網站，頁尾應顯示 **慢慢記 1.2.0 · 統一上傳版**，合併改在帳戶選單中的「全部帳戶」，不再有獨立按鈕。
+發布成功後開網站，頁尾應顯示 **慢慢記 1.3.0 · 自動行情與分類提醒版**，合併改在帳戶選單中的「全部帳戶」，不再有獨立按鈕。
 
 若仍看到舊畫面：儲存目前輸入、先匯出備份，關閉其他本網站分頁，再開 [本網站更新修復頁](https://goodgreatgreat.github.io/4/update.html)，按「更新程式畫面並回到記帳」。它只處理此網站的程式快取與離線註冊，不會清除帳本或 Token。這個入口須等本次檔案發布成功才存在。
 
 之後程式會在開啟／回到網站時檢查更新，有新版時提示「套用新版」；由你按下後載入，避免打字到一半被自動刷新。底部也可手動檢查。技術機制參考：[ServiceWorkerRegistration.update](https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerRegistration/update)。
 
-台股資料則依排程在平日台灣時間約 17:17 抓取並發布，GitHub 排程可能延遲。每檔仍顯示官方行情日期。這不代表本機程式會自動同步到 GitHub。
+台股資料則依排程在平日台灣時間約 17:17、19:17 抓取並發布（含永豐每日牌告匯率），GitHub 排程可能延遲。每檔仍顯示官方行情日期。這不代表本機程式會自動同步到 GitHub。
 
 ## 哪些不能上傳
 

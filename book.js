@@ -66,7 +66,7 @@ export function validate(b){
   for(const a of b.accounts){if(typeof a.name!=='string'||!a.name.trim()||!brokers.has(a.broker))throw Error('帳戶名稱或預設券商無效');}
   for(const broker of b.brokers){if(!broker.tw||!broker.us||typeof broker.name!=='string'||!['round','floor','ceil'].includes(broker.tw.round)||!['fixed','share','percent'].includes(broker.us.mode))throw Error('券商設定無效');for(const k of ['rate','discount','min'])number(broker.tw[k],'台股費率');for(const k of ['rate','min','extra','perShare','sellRate','sellShare','sellMin'])number(broker.us[k],'美股費率');if(!broker.name.trim())throw Error('券商名稱不可空白');if(broker.us.mode==='percent'&&broker.us.rate>1)throw Error('百分比費率超出範圍');if(broker.tw.rate>1||broker.tw.discount>1||broker.us.sellRate>1)throw Error('費率超出範圍');}
   for(const name of ['stock','etf','day']){number(b.settings.tax[name],'稅率');if(b.settings.tax[name]>1)throw Error('稅率超出範圍');}
-  for(const c of b.settings.categories){if(typeof c.name!=='string'||!c.name.trim())throw Error('分類名稱不可空白');for(const field of ['profit','loss','rise','fall'])if(c[field]!=null)number(c[field],'提醒門檻');}
+  for(const c of b.settings.categories){if(typeof c.name!=='string'||!c.name.trim())throw Error('分類名稱不可空白');for(const field of ['profit','loss','rise','fall']){if(c[field]!=null)number(c[field],'提醒門檻');if(c[field+'Action']&&!['buy','sell','note'].includes(c[field+'Action']))throw Error('提醒動作無效');}}
   const orderKeys=new Set();
   for(const e of b.entries){
     if(!accounts.has(e.account)||!['buy','sell','cash','stock','split','fxbuy','fxsell'].includes(e.kind))throw Error('紀錄帳戶／類型無效');
@@ -81,6 +81,7 @@ export function validate(b){
   if(!b.quotes||typeof b.quotes!=='object'||Array.isArray(b.quotes))throw Error('行情資料無效');
   for(const q of Object.values(b.quotes)){positive(q.close,'行情價格');day(q.date);if(q.date>today())throw Error('行情日期不可在未來');}
   if(b.settings.fx){positive(b.settings.fx.rate,'估值匯率');day(b.settings.fx.date);if(b.settings.fx.date>today())throw Error('匯率日期不可在未來');}
+  if(b.settings.fxMode&&!['sinopac','manual'].includes(b.settings.fxMode))throw Error('匯率模式無效');
   number(b.settings.tolerance,'容許偏差');
   for(const t of Object.values(b.settings.targets))number(t,'配置目標');
   calculate(b.entries);return b;
@@ -114,4 +115,20 @@ export function performance(book,market,quotes,date=today()){
   return {...xirr(flows),start:flows[0]?.date,end:flows.at(-1)?.date,quoteDates:[...new Set(dates)].sort(),value};
 }
 export function mergePositions(positions){const map=new Map();for(const p of positions){const k=quoteKey(p),r=map.get(k)||{...p,account:'all',quantity:0,cost:0,realized:0,dividend:0,fees:0};for(const f of ['quantity','cost','realized','dividend','fees'])r[f]+=p[f];r.average=r.quantity?r.cost/r.quantity:0;if(p.lastDividend&&(!r.lastDividend||p.lastDividend>r.lastDividend))r.lastDividend=p.lastDividend;map.set(k,r);}return [...map.values()];}
-export function signal(p,q,c,date=today()){if(!c||!usable(q,date))return [];const rate=p.cost?(q.close*p.quantity/p.cost-1)*100:null;const daily=q.date===date?q.change:null;const out=[];for(const [field,value,negative,label]of [['profit',rate,false,'獲利'],['loss',rate,true,'虧損'],['rise',daily,false,'今日上漲'],['fall',daily,true,'今日下跌']]){if(Number(c[field])>0&&Number.isFinite(value)&&(negative?-value:value)>=c[field])out.push(`${label}達 ${c[field]}%`);}return out;}
+export function signal(p,q,c,date=today()){if(!c||!(p.quantity>0)||!usable(q,date))return [];const rate=p.cost?(q.close*p.quantity/p.cost-1)*100:null;const tradingDate=p.market==='US'&&date===today()?new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()):date;const daily=q.date===tradingDate?q.change:null;const out=[];for(const [field,value,negative,label]of [['profit',rate,false,'獲利'],['loss',rate,true,'虧損'],['rise',daily,false,'今日上漲'],['fall',daily,true,'今日下跌']]){if(Number(c[field])>0&&Number.isFinite(value)&&(negative?-value:value)>=c[field])out.push(`${label}達 ${c[field]}%${c[field+'Action']?' · '+({buy:'買入觀察',sell:'賣出觀察',note:'留意'})[c[field+'Action']]:''}`);}return out;}
+export function totalReturn(entries,market,quotes,date=today()){
+  const b=calculate(entries.filter(e=>e.date<=date)),p=b.positions.filter(p=>p.market===market),held=p.filter(p=>p.quantity>0);
+  const invested=b.results.filter(e=>e.market===market&&e.kind==='buy').reduce((n,e)=>n-e.cash,0);
+  const realized=p.reduce((n,p)=>n+p.realized,0),dividend=p.reduce((n,p)=>n+p.dividend,0);
+  const missing=held.filter(p=>!usable(quotes[quoteKey(p)],date));
+  if(missing.length)return {invested,realized,dividend,reason:'缺少可用行情：'+missing.map(p=>p.symbol).join('、')};
+  const unrealized=held.reduce((n,p)=>n+quotes[quoteKey(p)].close*p.quantity-p.cost,0),profit=realized+dividend+unrealized;
+  return {invested,realized,dividend,unrealized,profit,rate:invested?profit/invested:null};
+}
+export function classifyPurchase(b,e){
+  if(e.kind!=='buy')return;
+  const old=b.classes.find(c=>key(c)===key(e));
+  // Adding an unclassified lot must not erase a stock's existing classification.
+  if(old){if(e.category)old.category=e.category;return;}
+  b.classes.push({id:uid(),account:e.account,market:e.market,symbol:e.symbol,category:e.category||'',bucket:e.assetType==='bond'?'債券':e.market==='TW'?'台股':'美股'});
+}
