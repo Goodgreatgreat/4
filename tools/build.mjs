@@ -1,0 +1,16 @@
+import {mkdir,readFile,writeFile,copyFile} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
+import {execFileSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+import {checkCatalog} from '../network.js';
+const files=['index.html','ui.css','main.js','updates.js','update.html','update-page.js','update-utils.js','book.js','period.js','results.js','network.js','quote-status.js','fx.js','symbols.js','panels.js','offline.js','mark.svg','manifest.json','data/taiwan.json','data/fx.json'];
+const root=new URL('../',import.meta.url),out=new URL('../dist/',import.meta.url);
+checkCatalog(JSON.parse(await readFile(new URL('data/taiwan.json',root),'utf8')));
+for(const f of files.filter(f=>f.endsWith('.js')))execFileSync(process.execPath,['--check',fileURLToPath(new URL(f,root))],{stdio:'inherit'});
+await mkdir(new URL('data/',out),{recursive:true});
+for(const f of files)await copyFile(new URL(f,root),new URL(f,out));
+const hash=createHash('sha256');for(const f of files.filter(f=>!f.startsWith('data/')))hash.update(await readFile(new URL(f,root)));
+const worker=(await readFile(new URL('offline.js',root),'utf8')).replace(/PREFIX\+'v[0-9]+'/ ,`PREFIX+'${hash.digest('hex').slice(0,16)}'`);
+await writeFile(new URL('offline.js',out),worker);
+await writeFile(new URL('.nojekyll',out),'');
+console.log('完成 dist：純靜態檔案，不含帳本、Token 或任何個人試算表。');
