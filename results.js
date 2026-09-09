@@ -4,7 +4,8 @@ export function resultView(u){
   const {entries,stock,mode,period,start,end,field,esc,cash,pct,metric,tone,choices}=u;
   const selectedEntries=entries.filter(e=>!stock||quoteKey(e)===stock);
   const name=choices.find(([k])=>k===stock)?.[1]||stock;
-  const controls=`<section class="report-controls" aria-label="成果篩選">${field('看哪一檔？','report-stock','text',stock,[['','全部股票（台美分開）'],...choices])}<div class="report-dates">${field('回顧期間','report-mode','text',mode,[['month','按月份'],['year','按年份'],['range','自訂起訖日']])}${mode==='all'?'':mode==='range'?`${field('開始日期','report-start','date',start)}${field('結束日期','report-end','date',end)}`:field(mode==='month'?'選擇月份':'選擇年份','report-period',mode==='month'?'month':'number',period)}${['month','year'].includes(mode)?'<div class="period-arrows"><button class="secondary" type="button" data-period-step="-1" aria-label="上一期">‹ 上一期</button><button class="secondary" type="button" data-period-step="1" aria-label="下一期">下一期 ›</button></div>':''}</div></section>`;
+  const periodPicker=mode==='all'?'':mode==='range'?`<div class="range-fields">${field('開始日期','report-start','date',start)}${field('結束日期','report-end','date',end)}</div>`:`<div class="period-picker">${field(mode==='month'?'選擇月份':'選擇年份','report-period',mode==='month'?'month':'number',period)}<div class="period-arrows"><button class="secondary" type="button" data-period-step="-1" aria-label="上一期">‹</button><button class="secondary" type="button" data-period-step="1" aria-label="下一期">›</button></div></div>`;
+  const controls=`<section class="report-controls" aria-label="成果篩選">${field('看哪一檔？','report-stock','text',stock,[['','全部股票（台美分開）'],...choices])}<div class="report-dates">${field('回顧期間','report-mode','text',mode,[['month','按月份'],['year','按年份'],['range','自訂起訖日']])}${periodPicker}</div></section>`;
   const heading=`<div class="page-heading"><div><h1>成果</h1></div></div>`;
   let range;try{range=reportRange(mode,period,start,end,selectedEntries);}catch(e){return heading+controls+`<p class="error" role="alert">${esc(e.message)}</p>`;}
   const full=calculate(selectedEntries),markets=stock?[stock.slice(0,2)]:['TW','US'].filter(m=>!selectedEntries.length||selectedEntries.some(e=>e.market===m));
@@ -38,8 +39,33 @@ return [...totals].map(([month,amount])=>({month,amount}));
 }
 export function monthlyChart(entries,market,start,end,{esc,cash}){
 const series=monthlySeries(entries,market,start,end);if(!series.length)return '';
-const lo=Math.min(0,...series.map(r=>r.amount)),hi=Math.max(0,...series.map(r=>r.amount)),span=hi-lo||1;
-const x=i=>series.length===1?300:42+i/(series.length-1)*516,y=v=>24+(hi-v)/span*142;
-const points=series.map((r,i)=>x(i)+','+y(r.amount)).join(' '),label='每月已實現損益加淨股利，不含未實現漲跌';
-return `<figure class="monthly-chart"><figcaption>每月賺多賺少 <small>已實現＋淨股利</small></figcaption><svg viewBox="0 0 600 210" role="img" aria-label="${label}"><line class="chart-zero" x1="42" x2="558" y1="${y(0)}" y2="${y(0)}"/><polyline class="chart-line" points="${points}"/>${series.map((r,i)=>`<circle class="${r.amount<0?'chart-loss':'chart-gain'}" cx="${x(i)}" cy="${y(r.amount)}" r="4"><title>${r.month} ${cash(r.amount,market)}</title></circle>`).join('')}<text x="42" y="200">${series[0].month}</text><text x="558" y="200" text-anchor="end">${series.at(-1).month}</text></svg><details class="more"><summary>查看各月金額</summary>${series.map(r=>`<div class="record-top"><span>${r.month}</span><strong class="${r.amount>0?'gain':r.amount<0?'loss':''}">${cash(r.amount,market)}</strong></div>`).join('')}</details><p class="meta">${label}；起訖月僅含選定日期。</p></figure>`;
+const label='每月已實現損益加淨股利，不含未實現漲跌';
+return `<figure class="monthly-chart" data-series="${esc(JSON.stringify(series))}" data-market="${market}"><figcaption>每月賺多賺少 <small>已實現＋淨股利 · ${market==='US'?'美元':'台幣'}</small></figcaption><div class="monthly-plot">${monthlyChartSvg(series,600,market)}</div><details class="more"><summary>查看各月金額</summary>${series.map(r=>`<div class="record-top"><span>${r.month}</span><strong class="${r.amount>0?'gain':r.amount<0?'loss':''}">${cash(r.amount,market)}</strong></div>`).join('')}</details><p class="meta">${label}；起訖月僅含選定日期。</p></figure>`;
+}
+
+// Use the available CSS width as the SVG coordinate width so labels stay legible.
+export function monthlyChartSvg(series,width=600,market='TW'){
+if(!series.length)return '';
+if(series.some(r=>!/^\d{4}-\d{2}$/.test(r.month)||!Number.isFinite(r.amount)))throw Error('無效月報資料');
+const w=Math.max(160,Math.round(Number.isFinite(width)?width:600));
+let lo=Math.min(0,...series.map(r=>r.amount)),hi=Math.max(0,...series.map(r=>r.amount));
+if(lo===hi){lo=-1;hi=1;}
+const span=hi-lo,left=56,right=w-12,slot=(right-left)/series.length,x=i=>left+(i+.5)*slot,y=v=>30+(hi-v)/span*126;
+const amount=v=>new Intl.NumberFormat('zh-TW',{maximumFractionDigits:market==='US'?2:0}).format(v);
+const axis=v=>new Intl.NumberFormat('zh-TW',{notation:'compact',maximumFractionDigits:Math.abs(v)<1?2:1}).format(v);
+const ticks=[...new Set([hi,0,lo])];
+const grid=ticks.map(v=>`<line class="${v===0?'chart-zero':'chart-grid'}" x1="${left}" x2="${right}" y1="${y(v)}" y2="${y(v)}"/><text x="${left-8}" y="${y(v)+4}" text-anchor="end">${axis(v)}</text>`).join('');
+const points=series.map((r,i)=>x(i)+','+y(r.amount)).join(' ');
+const barWidth=Math.max(.5,Math.min(36,slot*.65)),bars=series.map((r,i)=>`<rect class="monthly-bar ${r.amount<0?'chart-loss':'chart-gain'}" x="${x(i)-barWidth/2}" y="${Math.min(y(0),y(r.amount))}" width="${barWidth}" height="${Math.abs(y(r.amount)-y(0))}"><title>${r.month} ${market==='US'?'US$':'NT$'}${amount(r.amount)}</title></rect>`).join('');
+const dates=series.length===1?`<text x="${x(0)}" y="192" text-anchor="middle">${series[0].month}</text>`:`<text x="${left}" y="192">${series[0].month}</text><text x="${right}" y="192" text-anchor="end">${series.at(-1).month}</text>`;
+return `<svg viewBox="0 0 ${w} 210" role="img" aria-label="每月損益柱狀圖與同額走勢線，不含未實現漲跌；${market==='US'?'美元':'台幣'}"><title>柱：每月已實現＋淨股利；線：相同每月金額的走勢，非累計報酬。各月精確金額可展開下方明細。</title>${grid}${bars}<polyline class="chart-line monthly-trend" points="${points}"/>${series.map((r,i)=>`<circle class="${r.amount<0?'chart-loss':'chart-gain'}" cx="${x(i)}" cy="${y(r.amount)}" r="${series.length>36?2:3}"><title>${r.month} ${market==='US'?'US$':'NT$'}${amount(r.amount)}</title></circle>`).join('')}${dates}</svg>`;
+}
+
+export function fitMonthlyCharts(root){
+for(const figure of root.querySelectorAll('.monthly-chart[data-series]')){
+const plot=figure.querySelector('.monthly-plot'),width=Math.round(plot.getBoundingClientRect().width);
+if(!width||figure.dataset.chartWidth===String(width))continue;
+plot.innerHTML=monthlyChartSvg(JSON.parse(figure.dataset.series),width,figure.dataset.market);
+figure.dataset.chartWidth=String(width);
+}
 }
