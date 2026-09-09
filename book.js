@@ -1,3 +1,4 @@
+import {validateCash} from './cash.js';
 // Independent accounting model for 慢慢記. All rates below are decimal ratios.
 export const FORMAT='slow-stock-notebook';
 export const uid=()=>globalThis.crypto?.randomUUID?.()||`${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -84,7 +85,7 @@ export function validate(b){
   if(b.settings.fxMode&&!['sinopac','manual'].includes(b.settings.fxMode))throw Error('匯率模式無效');
   number(b.settings.tolerance,'容許偏差');
   for(const t of Object.values(b.settings.targets))number(t,'配置目標');
-  calculate(b.entries);return b;
+  validateCash(b);calculate(b.entries);return b;
 }
 export class Notebook{
   constructor(storage,keyName){this.storage=storage;this.key=keyName;}
