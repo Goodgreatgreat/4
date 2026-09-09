@@ -1,6 +1,0 @@
-dist/
-node_modules/
-*.zip
-*備份*.json
-*救援*.json
-.env*
