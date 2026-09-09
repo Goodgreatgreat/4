@@ -22,7 +22,7 @@ const storageKey=`slow-notebook:1:${new URL('.',location.href).pathname}`,store=
 let state,combined=false,catalog={},page='entry',kind='buy',draft={},stockFilter='',reportMode='month',reportPeriod=today().slice(0,7),reportStock='',reportStart=today().slice(0,7)+'-01',reportEnd=today(),reportPrices={},busy=false,success='',revision=null;
 let stockMarket='mixed',pieBasis='value',assetAccount='__all__';
 let fieldNumber=0,quoteError='',quoteChecked='',bankQuote=null;
-function priceStatus(){const q=quoteStatus(catalog,{online:navigator.onLine,error:quoteError,checkedAt:quoteChecked});return `<aside class="quote-status${q.warning?' signal':''}" role="status"><strong>${busy?'正在檢查行情…':esc(q.message)}</strong><p>${esc(q.detail)}</p><details><summary>更新資訊</summary><p class="meta">${quoteChecked?'本機檢查 '+esc(quoteChecked)+'。':''}非盤中即時；個別停牌／休市請看股票卡片的日期。</p>${quoteError?`<p class="warning">${esc(quoteError)}</p>`:''}<p>開啟、切回、重新連網及停留畫面時會檢查，每小時最多自動讀取一次。伺服器在平日 17:17、19:17 更新官方日收盤，排程可能延遲；不能把舊价標為今日。</p><p>如果一直不更新：GitHub 須包含 .github/workflows/pages.yml、data、tools，Pages 來源選 GitHub Actions。檢查「更新官方台股行情並發布」是否成功或被停用。</p><button class="text-link" type="button" data-refresh>立即重新讀取行情</button></details></aside>`;}
+function priceStatus(){const q=quoteStatus(catalog,{online:navigator.onLine,error:quoteError,checkedAt:quoteChecked});return `<aside class="quote-status${q.warning?' signal':''}" role="status"><strong>${busy?'正在檢查行情…':esc(q.message)}</strong><p>${esc(q.detail)}</p><details><summary>更新資訊</summary><p class="meta">${quoteChecked?'本機檢查 '+esc(quoteChecked)+'。':''}非盤中即時；個別停牌／休市請看股票卡片的日期。</p>${quoteError?`<p class="warning">${esc(quoteError)}</p>`:''}<p>開啟、切回、重新連網及停留畫面時會檢查，台灣時間平日 13:45～14:30 每 5 分鐘讀取一次已發布行情，其他時段每小時一次；離線、背景或編輯視窗開啟時暫停。伺服器排程於平日 13:45 抓取官方日收盤，17:17、19:17 再試；排程啟動及發布可能延遲，13:45 不是保證完成時間。舊資料保留原行情日期。Tiingo 自動查詢仍最多每小時一次。</p><p>如果一直不更新：GitHub 須包含 .github/workflows/pages.yml、data、tools，Pages 來源選 GitHub Actions。檢查「更新官方台股行情並發布」是否成功或被停用。</p><button class="text-link" type="button" data-refresh>立即重新讀取行情</button></details></aside>`;}
 function updateQuoteStatus(){for(const el of $$('[data-quote-status]'))el.innerHTML=priceStatus();}
 const root=$('#workspace'),sheet=$('#sheet');
 const ui={field,get problem(){return problem;},esc,cash,pct,tone,pie,account,accountName,defaultBroker,book,classOf,buckets,get state(){return state;},get bankQuote(){return bankQuote;},scoped,connection};
@@ -114,7 +114,7 @@ async function refresh(force=false,newEntry=false){
   if(!state)return;
   if(!navigator.onLine){updateQuoteStatus();if(force)message('離線中，已保留原行情；連網後會再檢查。');return;}
   if(busy||sheet.open)return;
-  let last=0,attempt=0;try{last=Number(sessionStorage.getItem(storageKey+':refresh')||0);attempt=Number(sessionStorage.getItem(storageKey+':refresh-attempt')||0);}catch{}
+  let last=0,attempt=0,lastUs=0;try{last=Number(sessionStorage.getItem(storageKey+':refresh')||0);attempt=Number(sessionStorage.getItem(storageKey+':refresh-attempt')||0);lastUs=Number(sessionStorage.getItem(storageKey+':us-refresh')||0);}catch{}
   if(!force&&!newEntry&&Date.now()-attempt<300000)return;
   if(!shouldRefresh({online:navigator.onLine,visible:force||document.visibilityState==='visible',busy,editing:sheet.open,last,force:force||newEntry}))return;
   busy=true;try{sessionStorage.setItem(storageKey+':refresh-attempt',String(Date.now()));}catch{}updateQuoteStatus();const failures=[];
@@ -133,7 +133,8 @@ async function refresh(force=false,newEntry=false){
     }catch(e){failures.push(e.message);}
     try{bankQuote=await loadFx();if(!sheet.open&&fxMode(state.settings)==='sinopac'&&JSON.stringify(state.settings.fx)!==JSON.stringify({rate:bankQuote.buy,date:bankQuote.date,quotedAt:bankQuote.quotedAt,source:bankQuote.source}))commit(b=>applyFx(b.settings,bankQuote));}catch(e){if(fxMode(state.settings)==='sinopac')failures.push(e.message);}
     const c=connection();
-    if(c.enabled&&(force||c.auto)&&!sheet.open){
+    if(c.enabled&&(force||c.auto)&&!sheet.open&&(force||newEntry||Date.now()-lastUs>=3600000)){
+      try{sessionStorage.setItem(storageKey+':us-refresh',String(Date.now()));}catch{}
       const symbols=[...new Set(calculate(state.entries).positions.filter(p=>p.market==='US'&&p.quantity>0).map(p=>p.symbol))];
       for(const s of symbols){
         if(sheet.open)break;
