@@ -28,6 +28,28 @@ export function charges(entry,broker,tax){
   return {fee,tax:levy};
 }
 export function ordered(entries){return [...entries].sort((a,b)=>a.date.localeCompare(b.date)||a.order-b.order||a.id.localeCompare(b.id));}
+// Hypothetical full sale, one order per account using its current default broker.
+// Keep this separate from actual trades, cash balances and mark-to-market returns.
+export function estimateSale(positions,state,{catalog={},date=today()}={}){
+  const held=positions.filter(p=>p.quantity>0),rows=[];
+  if(new Set(held.map(p=>p.market)).size>1)return {reason:'不同幣別不可直接合計賣出試算'};
+  for(const p of held){
+    const q=state.quotes[quoteKey(p)];
+    if(!usable(q))return {reason:`${p.symbol} 尚缺股價或需確認分割`};
+    const acct=state.accounts.find(a=>a.id===p.account),broker=state.brokers.find(b=>b.id===acct?.broker);
+    if(!broker)return {reason:'請先設定各帳戶目前的賣出券商'};
+    const last=ordered(state.entries.filter(e=>key(e)===key(p)&&['buy','sell'].includes(e.kind))).at(-1);
+    let assetType=p.market==='TW'?(catalog[p.symbol]?.type||last?.assetType):'stock';
+    if(assetType==='day')assetType='stock';
+    if(!['stock','etf','bond'].includes(assetType))return {reason:'請先確認股票／ETF 稅別'};
+    const cost=p.cost,gross=p.quantity*q.close,fees=charges({market:p.market,symbol:p.symbol,kind:'sell',quantity:p.quantity,price:q.close,date,assetType},broker,state.settings.tax);
+    const net=gross-fees.fee-fees.tax,pnl=net-cost;
+    if(![gross,net,pnl,fees.fee,fees.tax].every(Number.isFinite))return {reason:'賣出試算金額超出範圍'};
+    rows.push({account:p.account,broker:broker.name,assetType,quantity:p.quantity,price:q.close,quoteDate:q.date,gross,cost,fee:fees.fee,tax:fees.tax,net,pnl});
+  }
+  const sum=k=>rows.reduce((n,r)=>n+r[k],0),cost=sum('cost'),pnl=sum('pnl');
+  return {rows,cost,pnl,gross:sum('gross'),fee:sum('fee'),tax:sum('tax'),net:sum('net'),rate:cost?pnl/cost:null};
+}
 export function calculate(entries){
   const holdings=new Map(),fx=new Map(),results=[];
   for(const e of ordered(entries)){
