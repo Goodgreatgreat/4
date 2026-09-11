@@ -72,7 +72,13 @@
 .stock-open{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:center;gap:14px;width:100%;text-align:left;background:transparent;padding:0}
 .stock-open>span{min-width:0;overflow-wrap:anywhere}.stock-open>span:last-child{text-align:right}
 .stock-open strong{display:block;font-size:1rem;overflow-wrap:anywhere}.stock-open small{display:block;font-size:.8125rem;color:var(--muted)}
+/* Keep the full name below its code; allow enlarged text to grow instead of clipping. */
+body{overflow-wrap:anywhere}.stock-title{min-width:0;white-space:normal}.stock-title>span{display:block;max-width:100%}.stock-label{font-weight:500;line-height:1.55}.stock-code{font-variant-numeric:tabular-nums}
+.record-top>*{min-width:0}.record-top>button{flex-shrink:0}.tabs button{min-width:0;white-space:normal;overflow-wrap:anywhere}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.metrics>div{min-width:0}.sheet-head h2{white-space:pre-line}
 .stock-list .stock{padding:18px}.compact-controls .field{margin-bottom:0}
+.record-actions{display:flex;gap:24px;align-items:center;flex-wrap:wrap}.danger{color:#9c3634}.settings-add{margin-top:16px}.review-filters{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:14px}.review-filters .field{margin-bottom:0}.review-filters input{min-width:0;max-width:100%}
+.fee-review-notice{margin-top:0}.fee-difference{align-items:center;min-height:48px}.fee-difference input{flex-shrink:0}.fee-difference small{display:block}
+.sheet-head{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px}.sheet-head #back-sheet{min-width:64px;padding:8px;font-size:.875rem}.sheet-head #close-sheet{min-width:44px;font-size:1.5rem;padding:4px}.sheet-head h2{font-size:1.1rem}
 .report-dates{grid-template-columns:minmax(140px,.7fr) minmax(0,1.3fr)}
 .period-picker{display:grid;grid-template-columns:minmax(0,1fr) 96px;gap:8px;align-items:end;min-width:0}
 .period-arrows{display:flex;gap:8px;align-items:end}.period-arrows>*{flex:1;min-width:44px;padding:0;font-size:1.5rem;font-weight:400}
@@ -141,3 +147,9 @@ html{scroll-padding-bottom:110px;-webkit-text-size-adjust:100%}
 @media(max-width:700px){.review-cards{grid-template-columns:minmax(0,1fr)}.review-card{padding:12px}}
 .stock-filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:end;gap:10px}.stock-filters .field{min-width:0;margin:0}.stock-filters input,.stock-filters select{width:100%;min-width:0;font-size:1rem}.stock-filters label{font-size:.875rem}
 @media(max-width:380px){.stock-detail-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* Equal side columns keep the heading centered even when Back is absent. */
+.sheet-head{grid-template-columns:4.5rem minmax(0,1fr) 4.5rem;gap:4px;padding-block:10px}
+.sheet-head #sheet-title{grid-column:2;grid-row:1;text-align:center;color:#222;font-size:1.1rem;line-height:1.4;margin:0}
+.sheet-head #back-sheet,.sheet-head #close-sheet{grid-row:1;width:100%;min-width:44px;min-height:48px;background:transparent;border:0;box-shadow:none;padding:8px 0;color:var(--ink)}
+.sheet-head #back-sheet{grid-column:1;font-size:.9375rem}.sheet-head #close-sheet{grid-column:3;font-size:1.5rem}
+.fee-review-status{margin:0 0 14px}.fee-review-status summary{font-size:.8125rem;color:var(--muted);padding-block:6px}

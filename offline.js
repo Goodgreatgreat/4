@@ -1,5 +1,5 @@
 const PREFIX='slow-notebook-shell-'+self.registration.scope;
-const CACHE=PREFIX+'v7';
+const CACHE=PREFIX+'v12';
 const FILES=['./','./index.html','./ui.css','./main.js','./updates.js','./book.js','./cash.js','./period.js','./results.js','./trade-chart.js','./panels.js','./network.js','./quote-status.js','./fx.js','./symbols.js','./mark.svg','./manifest.json','./data/taiwan.json','./data/fx.json'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES))));
 // Wait normally. Only an explicit user update action activates early.

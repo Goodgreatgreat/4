@@ -11,21 +11,56 @@ export function key(r){return JSON.stringify([r.account,r.market,r.symbol]);}
 export function quoteKey(r){return `${r.market}:${r.symbol}`;}
 export const moneyRound=(n,d=2)=>Math.round((n+Number.EPSILON)*10**d)/10**d;
 export function emptyBook(){return {format:FORMAT,version:1,revision:0,entries:[],assets:[],classes:[],history:[],quotes:{},accounts:[{id:'main',name:'我的帳戶',broker:'standard'}],brokers:[{id:'standard',name:'我的常用券商',tw:{rate:0.001425,discount:1,min:20,round:'round'},us:{mode:'fixed',rate:0,min:0,extra:0,perShare:0,sellRate:0,sellShare:0,sellMin:0}}],settings:{account:'main',tax:{stock:.003,etf:.001,day:.0015},categories:[{id:'long',name:'長期持有'},{id:'income',name:'存股領息'},{id:'flex',name:'靈活操作'}],targets:{},tolerance:5,fx:null,monthlySeen:'',plans:{TW:{},US:{}}}};}
+export function roundTwd(value,mode='round'){const nearest=Math.round(value),n=Math.abs(value-nearest)<1e-8?nearest:value;return (mode==='floor'?Math.floor:mode==='ceil'?Math.ceil:Math.round)(n);}
 export function charges(entry,broker,tax){
   const gross=positive(entry.price,'成交價')*positive(entry.quantity,'股數');
   let fee=0,levy=0;
   if(entry.market==='TW'){
-    const b=broker.tw;const raw=Math.max(gross*b.rate*b.discount,b.min);fee=(b.round==='floor'?Math.floor:b.round==='ceil'?Math.ceil:Math.round)(raw);
+    const b=broker.tw;const raw=Math.max(gross*b.rate*b.discount,b.min);fee=roundTwd(raw,b.round);
     let rate=tax[entry.assetType]??tax.stock;
     if(entry.assetType==='bond')rate=entry.date>='2017-01-01'&&entry.date<='2026-12-31'?0:tax.etf;
     if(entry.assetType==='day'&&(entry.date<'2017-04-28'||entry.date>'2027-12-31'))rate=tax.stock;
-    levy=entry.kind==='sell'?Math.round(gross*rate):0;
+    levy=entry.kind==='sell'?roundTwd(gross*rate,b.taxRound||'round'):0;
   }else{
     const b=broker.us;const base=b.mode==='share'?entry.quantity*b.rate:b.mode==='percent'?gross*b.rate:b.rate;
     fee=moneyRound(Math.max(base,b.min)+b.extra+entry.quantity*b.perShare);
     if(entry.kind==='sell')levy=moneyRound(Math.max(gross*b.sellRate+entry.quantity*b.sellShare,b.sellMin));
   }
   return {fee,tax:levy};
+}
+// Historical fees stay unchanged until a user confirms individual fee/tax differences.
+export function queueFeeReview(b,brokerId){
+  b.settings.feeReviewBrokers=[...new Set([...(b.settings.feeReviewBrokers||[]),brokerId])];
+  const targets=new Map(Object.entries(b.settings.feeReviewEntryIds||{}));
+  targets.set(brokerId,b.entries.filter(e=>e.broker===brokerId&&['buy','sell'].includes(e.kind)).map(e=>e.id));
+  b.settings.feeReviewEntryIds=Object.fromEntries(targets);
+}
+export function feeReviewScope(b){return b.settings.feeReviewBrokers??b.brokers.map(x=>x.id);}
+export function brokerFeeDifferences(b,brokerIds=feeReviewScope(b)){
+  const ids=new Set(brokerIds),rows=[];
+  for(const e of ordered(b.entries)){
+    if(!ids.has(e.broker)||!['buy','sell'].includes(e.kind))continue;
+    if(b.settings.feeReviewEntryIds&&Object.hasOwn(b.settings.feeReviewEntryIds,e.broker)&&!b.settings.feeReviewEntryIds[e.broker].includes(e.id))continue;
+    const broker=b.brokers.find(x=>x.id===e.broker);if(!broker)continue;
+    const after=charges(e,broker,b.settings.tax),fields=['fee','tax'].filter(k=>Math.abs(e[k]-after[k])>1e-8);
+    if(fields.length)rows.push({entry:copy(e),broker:broker.name,after,fields});
+  }
+  return rows;
+}
+export function applyFeeReview(b,rows,selections){
+  const patches=new Map(),seen=new Set();
+  for(const {id,field} of selections){
+    const token=JSON.stringify([id,field]);if(seen.has(token))continue;seen.add(token);
+    const row=rows.find(r=>r.entry.id===id),e=b.entries.find(e=>e.id===id);
+    if(!row||!e||!row.fields.includes(field)||!['fee','tax'].includes(field)||!feeReviewScope(b).includes(e.broker))throw Error('待修改項目已變更，請重新查看差異');
+    if(JSON.stringify(e)!==JSON.stringify(row.entry))throw Error('交易已被修改，請重新查看差異');
+    const broker=b.brokers.find(x=>x.id===e.broker),now=charges(e,broker,b.settings.tax);
+    if(now[field]!==row.after[field])throw Error('券商費率已變更，請重新查看差異');
+    const next=patches.get(id)||copy(e);next[field]=now[field];next[field+'Source']='broker';patches.set(id,next);
+  }
+  if(!patches.size)throw Error('請先勾選要修改的費用或稅費');
+  const batch=uid();for(const e of patches.values()){saveEvent(b,e);b.history[0].batch=batch;b.history[0].reason='批次套用券商費稅';}
+  return patches.size;
 }
 export function ordered(entries){return [...entries].sort((a,b)=>a.date.localeCompare(b.date)||a.order-b.order||a.id.localeCompare(b.id));}
 // Hypothetical full sale, one order per account using its current default broker.
@@ -86,14 +121,17 @@ export function validate(b){
   records(b.entries,'交易紀錄');records(b.assets,'資產');records(b.classes,'股票分類');records(b.history,'變更紀錄');
   if(!b.settings||!accounts.has(b.settings.account)||!b.settings.tax||!b.settings.targets)throw Error('設定不完整');
   const categories=records(b.settings.categories,'分類設定');
+  if(b.settings.feeReviewBrokers!==undefined&&(!Array.isArray(b.settings.feeReviewBrokers)||b.settings.feeReviewBrokers.some(id=>typeof id!=='string'||!brokers.has(id))))throw Error('費稅差異提醒設定無效');
+  if(b.settings.feeReviewEntryIds!==undefined){const targets=b.settings.feeReviewEntryIds;if(!targets||typeof targets!=='object'||Array.isArray(targets)||Object.entries(targets).some(([id,ids])=>!brokers.has(id)||!Array.isArray(ids)||ids.some(value=>typeof value!=='string')))throw Error('費稅檢查範圍無效');}
   for(const a of b.accounts){if(typeof a.name!=='string'||!a.name.trim()||!brokers.has(a.broker))throw Error('帳戶名稱或預設券商無效');}
-  for(const broker of b.brokers){if(!broker.tw||!broker.us||typeof broker.name!=='string'||!['round','floor','ceil'].includes(broker.tw.round)||!['fixed','share','percent'].includes(broker.us.mode))throw Error('券商設定無效');for(const k of ['rate','discount','min'])number(broker.tw[k],'台股費率');for(const k of ['rate','min','extra','perShare','sellRate','sellShare','sellMin'])number(broker.us[k],'美股費率');if(!broker.name.trim())throw Error('券商名稱不可空白');if(broker.us.mode==='percent'&&broker.us.rate>1)throw Error('百分比費率超出範圍');if(broker.tw.rate>1||broker.tw.discount>1||broker.us.sellRate>1)throw Error('費率超出範圍');}
+  for(const broker of b.brokers){if(!broker.tw||!broker.us||typeof broker.name!=='string'||(!['round','floor','ceil'].includes(broker.tw.round)||(broker.tw.taxRound!==undefined&&!['round','floor','ceil'].includes(broker.tw.taxRound)))||!['fixed','share','percent'].includes(broker.us.mode))throw Error('券商設定無效');for(const k of ['rate','discount','min'])number(broker.tw[k],'台股費率');for(const k of ['rate','min','extra','perShare','sellRate','sellShare','sellMin'])number(broker.us[k],'美股費率');if(!broker.name.trim())throw Error('券商名稱不可空白');if(broker.us.mode==='percent'&&broker.us.rate>1)throw Error('百分比費率超出範圍');if(broker.tw.rate>1||broker.tw.discount>1||broker.us.sellRate>1)throw Error('費率超出範圍');}
   for(const name of ['stock','etf','day']){number(b.settings.tax[name],'稅率');if(b.settings.tax[name]>1)throw Error('稅率超出範圍');}
   for(const c of b.settings.categories){if(typeof c.name!=='string'||!c.name.trim())throw Error('分類名稱不可空白');for(const field of ['profit','loss','rise','fall']){if(c[field]!=null)number(c[field],'提醒門檻');if(c[field+'Action']&&!['buy','sell','note'].includes(c[field+'Action']))throw Error('提醒動作無效');}}
   const orderKeys=new Set();
   for(const e of b.entries){
     if(!accounts.has(e.account)||!['buy','sell','cash','stock','split','fxbuy','fxsell'].includes(e.kind))throw Error('紀錄帳戶／類型無效');
     day(e.date);if(e.date>today())throw Error('請填已發生的日期，不能預記未來成交');number(e.order,'同日順序');const orderKey=JSON.stringify([e.account,e.date,e.order]);if(orderKeys.has(orderKey))throw Error('同帳戶同一天的順序重複，請調整順序');orderKeys.add(orderKey);
+    for(const k of ['feeSource','taxSource'])if(e[k]!==undefined&&!['broker','actual','unknown'].includes(e[k]))throw Error('費稅來源標記無效');
     if(!e.kind.startsWith('fx')){
       if(!['TW','US'].includes(e.market)||typeof e.symbol!=='string'||!(/^[A-Z0-9][A-Z0-9.-]{0,31}$/.test(e.symbol)))throw Error('市場或股票代號無效');
       if(['buy','sell'].includes(e.kind)&&(!brokers.has(e.broker)||!['stock','etf','bond','day'].includes(e.assetType)))throw Error('交易券商或商品類型無效');
