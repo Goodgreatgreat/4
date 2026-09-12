@@ -153,3 +153,9 @@ html{scroll-padding-bottom:110px;-webkit-text-size-adjust:100%}
 .sheet-head #back-sheet,.sheet-head #close-sheet{grid-row:1;width:100%;min-width:44px;min-height:48px;background:transparent;border:0;box-shadow:none;padding:8px 0;color:var(--ink)}
 .sheet-head #back-sheet{grid-column:1;font-size:.9375rem}.sheet-head #close-sheet{grid-column:3;font-size:1.5rem}
 .fee-review-status{margin:0 0 14px}.fee-review-status summary{font-size:.8125rem;color:var(--muted);padding-block:6px}
+.row.entry-defaults{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end}
+.entry-defaults>.field{min-width:0}
+.entry-defaults>.field:only-child{grid-column:1/-1}
+.entry-defaults select{width:100%;min-width:0;max-width:100%;font-size:1rem;padding-inline:10px}
+.entry-recalculate{min-height:44px;font-size:.875rem}
+.entry-recalculate input{flex-shrink:0}
