@@ -85,6 +85,19 @@ export function estimateSale(positions,state,{catalog={},date=today()}={}){
   const sum=k=>rows.reduce((n,r)=>n+r[k],0),cost=sum('cost'),pnl=sum('pnl');
   return {rows,cost,pnl,gross:sum('gross'),fee:sum('fee'),tax:sum('tax'),net:sum('net'),rate:cost?pnl/cost:null};
 }
+export function estimatePortfolioSale(positions,state,{market='mixed',catalog={},date=today()}={}){
+  const held=positions.filter(p=>p.quantity>0&&(market==='mixed'||p.market===market));
+  let cost=0,pnl=0;
+  for(const p of held){
+    const sale=estimateSale([p],state,{catalog,date});
+    if(sale.reason)return {reason:sale.reason,cost:null,pnl:null,rate:null};
+    const factor=market==='mixed'&&p.market==='US'?state.settings.fx?.rate:1;
+    if(!Number.isFinite(factor)||factor<=0)return {reason:'缺少有效美元匯率',cost:null,pnl:null,rate:null};
+    cost+=sale.cost*factor;pnl+=sale.pnl*factor;
+  }
+  if(!Number.isFinite(cost)||!Number.isFinite(pnl))return {reason:'試算金額超出範圍',cost:null,pnl:null,rate:null};
+  return {cost,pnl,rate:cost>0?pnl/cost:null};
+}
 export function calculate(entries){
   const holdings=new Map(),fx=new Map(),results=[];
   for(const e of ordered(entries)){
@@ -146,6 +159,13 @@ export function validate(b){
   number(b.settings.tolerance,'容許偏差');
   for(const t of Object.values(b.settings.targets))number(t,'配置目標');
   validateCash(b);calculate(b.entries);return b;
+}
+export function pruneUnusedDefaults(b){
+  const refs=JSON.stringify({entries:b.entries,assets:b.assets,classes:b.classes,history:b.history,cashOpenings:b.cashOpenings,cashMovements:b.cashMovements});
+  const old=b.accounts.find(a=>a.id==='main'&&a.name==='我的帳戶');
+  if(old&&b.accounts.length>1&&b.settings.account!==old.id&&!refs.includes(JSON.stringify(old.id)))b.accounts=b.accounts.filter(a=>a!==old);
+  const broker=b.brokers.find(a=>a.id==='standard'&&a.name==='我的常用券商');
+  if(broker&&b.brokers.length>1&&!b.accounts.some(a=>a.broker===broker.id)&&!refs.includes(JSON.stringify(broker.id))&&!JSON.stringify(b.settings).includes(JSON.stringify(broker.id)))b.brokers=b.brokers.filter(a=>a!==broker);
 }
 export class Notebook{
   constructor(storage,keyName){this.storage=storage;this.key=keyName;}
