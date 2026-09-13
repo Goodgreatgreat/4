@@ -13,7 +13,7 @@ export function quoteStatus(catalog,{online=true,error='',checkedAt='',date=toda
 }
 export function quoteRefreshInterval(now=Date.now()){
   const taipei=new Date(now+8*60*60*1000),weekday=taipei.getUTCDay(),minute=taipei.getUTCHours()*60+taipei.getUTCMinutes();
-  return weekday>=1&&weekday<=5&&minute>=13*60+45&&minute<14*60+30?300000:3600000;
+  return weekday>=1&&weekday<=5&&minute>=13*60+35&&minute<14*60+30?300000:3600000;
 }
 export function shouldRefresh({online=true,visible=true,busy=false,editing=false,last=0,now=Date.now(),force=false}={}){
   return online&&visible&&!busy&&!editing&&(force||now-last>=quoteRefreshInterval(now));
