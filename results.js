@@ -64,9 +64,21 @@ return `<svg viewBox="0 0 ${w} 210" role="img" aria-label="每月損益柱狀圖
 export function fitMonthlyCharts(root){
 for(const figure of root.querySelectorAll('.stock-month-chart')){
   if(figure.dataset.bound)continue;figure.dataset.bound='1';
+  const tip=figure.querySelector('.stock-profit-tooltip');
+  const hide=()=>{tip.hidden=true;for(const b of figure.querySelectorAll('.stock-profit-column'))b.setAttribute('aria-pressed','false');};
+  figure.addEventListener('pointerleave',hide);figure.addEventListener('scroll',hide,true);
   for(const button of figure.querySelectorAll('.stock-profit-column')){
-    const show=()=>{figure.querySelector('.stock-profit-readout').textContent=button.getAttribute('aria-label');for(const b of figure.querySelectorAll('.stock-profit-column'))b.setAttribute('aria-pressed',String(b===button));};
-    button.addEventListener('pointerenter',show);button.addEventListener('focus',show);button.addEventListener('click',show);
+    const show=(event={})=>{
+      tip.textContent=button.getAttribute('data-tooltip');tip.hidden=false;
+      const bounds=figure.getBoundingClientRect(),bar=button.getBoundingClientRect();
+      const x=Number.isFinite(event.clientX)?event.clientX:bar.left+bar.width/2,y=Number.isFinite(event.clientY)?event.clientY:bar.top;
+      const box=tip.getBoundingClientRect();
+      tip.style.left=Math.max(0,Math.min(x-bounds.left+12,bounds.width-box.width))+'px';
+      tip.style.top=Math.max(0,(y+12+box.height>globalThis.innerHeight?y-bounds.top-box.height-12:y-bounds.top+12))+'px';
+      for(const b of figure.querySelectorAll('.stock-profit-column'))b.setAttribute('aria-pressed',String(b===button));
+    };
+    button.addEventListener('pointerenter',show);button.addEventListener('pointermove',show);button.addEventListener('focus',show);button.addEventListener('click',show);
+    button.addEventListener('blur',hide);button.addEventListener('keydown',e=>{if(e.key==='Escape')hide();if(e.key==='Enter'||e.key===' '){e.preventDefault();show();}});
   }
 }
 for(const figure of root.querySelectorAll('.monthly-chart[data-series]')){
@@ -92,6 +104,7 @@ export function stockMonthChart(entries,market,start,end,{esc,cash}){
   const series=stockMonthSeries(entries,market,start,end);
   if(!series.length)return '<p class="empty">這個月沒有股票交易或股利紀錄。</p>';
   const lo=Math.min(0,...series.map(r=>r.amount)),hi=Math.max(0,...series.map(r=>r.amount)),span=hi-lo||1;
-  const zero=hi===lo?50:hi/span*100;
-  return `<figure class="stock-month-chart"><figcaption>本月各股獲利 <small>已實現＋淨股利 · ${market==='US'?'美元':'台幣'} · 由低到高</small></figcaption><output class="stock-profit-readout" aria-live="polite">點選柱子查看股票與金額</output><div class="stock-profit-scroll"><div class="stock-profit-columns" style="grid-template-columns:repeat(${series.length},minmax(62px,1fr));--profit-zero:${zero}%">${series.map(r=>{const top=r.amount>=0?zero-r.amount/span*100:zero,height=Math.abs(r.amount)/span*100;const label=`${r.symbol} ${r.name}：${cash(r.amount,market)}（已實現 ${cash(r.realized,market)}＋淨股利 ${cash(r.dividend,market)}）`;return `<button type="button" class="stock-profit-column" aria-pressed="false" aria-label="${esc(label)}" title="${esc(label)}"><span class="stock-profit-track"><span class="stock-profit-bar ${r.amount<0?'negative':r.amount>0?'positive':'neutral'}" style="top:${top}%;height:${height}%"></span></span><span class="stock-profit-symbol">${esc(r.symbol)}</span></button>`;}).join('')}</div></div><p class="meta">每檔一根，最右邊獲利最高；可左右滑動。僅買入而未賣出／領息者為 0，不代表沒有未實現漲跌。</p></figure>`;
+  const width=Math.max(320,series.length*48+60),slot=(width-60)/series.length,y=v=>24+(hi===lo?.5:(hi-v)/span)*160,baseline=y(0);
+  const extremes=[[hi,'最高獲利','profit-high'],[lo,'最大虧損','profit-low']].filter(([value])=>value!==0).map(([value,label,cls])=>`<g class="stock-profit-extreme ${cls}"><line x1="44" x2="${width-10}" y1="${y(value)}" y2="${y(value)}"/><text x="48" y="${y(value)+(value>0?-8:18)}">${label} ${esc(cash(value,market))}</text></g>`).join('');
+  return `<figure class="stock-month-chart"><figcaption>本月各股獲利 <small>已實現＋淨股利 · ${market==='US'?'美元':'台幣'} · 由低到高</small></figcaption><output class="stock-profit-tooltip" role="tooltip" aria-live="polite" hidden></output><div class="stock-profit-scroll"><svg class="stock-profit-svg" width="${width}" height="220" viewBox="0 0 ${width} 220" role="group" aria-label="本月各股損益，由左至右由低到高"><line class="chart-zero" x1="44" x2="${width-10}" y1="${baseline}" y2="${baseline}"/><text x="36" y="${baseline+4}" text-anchor="end">0</text>${extremes}${series.map((r,i)=>{const x=44+(i+.5)*slot,top=Math.min(baseline,y(r.amount)),height=Math.max(2,Math.abs(y(r.amount)-baseline));const label=`${r.symbol} ${r.name}：${cash(r.amount,market)}（已實現 ${cash(r.realized,market)}＋淨股利 ${cash(r.dividend,market)}）`;return `<g role="button" tabindex="0" class="stock-profit-column" aria-pressed="false" aria-label="${esc(label)}" data-tooltip="${esc(`${r.symbol} ${r.name}\n已實現 ${cash(r.realized,market)}`)}"><rect class="stock-profit-hit" x="${44+i*slot}" y="14" width="${slot}" height="184"/><rect class="stock-profit-bar ${r.amount<0?'negative':r.amount>0?'positive':'neutral'}" x="${x-Math.min(32,slot*.65)/2}" y="${r.amount===0?baseline-1:top}" width="${Math.min(32,slot*.65)}" height="${height}" rx="2"/></g>`;}).join('')}</svg></div><p class="meta">每檔一根，最右邊獲利最高；股票多可左右滑動。僅買入而未賣出／領息者為 0，不代表沒有未實現漲跌。</p></figure>`;
 }
