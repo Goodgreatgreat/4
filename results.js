@@ -5,7 +5,7 @@ export function resultView(u){
   const selectedEntries=entries.filter(e=>!stock||quoteKey(e)===stock);
   const name=choices.find(([k])=>k===stock)?.[1]||stock;
   const periodPicker=mode==='all'?'':mode==='range'?`<div class="range-fields">${field('開始日期','report-start','date',start)}${field('結束日期','report-end','date',end)}</div>`:`<div class="period-picker">${field(mode==='month'?'選擇月份':'選擇年份','report-period',mode==='month'?'month':'number',period)}<div class="period-arrows"><button class="secondary" type="button" data-period-step="-1" aria-label="上一期">‹</button><button class="secondary" type="button" data-period-step="1" aria-label="下一期">›</button></div></div>`;
-  const controls=`<section class="report-controls" aria-label="成果篩選">${field('看哪一檔？','report-stock','text',stock,[['','全部股票（台美分開）'],...choices])}<div class="report-dates">${field('回顧期間','report-mode','text',mode,[['month','按月份'],['year','按年份'],['range','自訂起訖日']])}${periodPicker}</div></section>`;
+  const controls=`<section class="report-controls" aria-label="成果篩選">${field('看哪一檔？','report-stock','text',stock,[['','全部股票（台美分開）'],...choices])}<div class="report-dates"><div class="report-mode-tabs" role="group" aria-label="回顧期間">${[['month','月'],['year','年'],['range','自訂']].map(([value,label])=>`<label class="${mode===value?'active':''}"><input type="radio" name="report-mode" value="${value}" ${mode===value?'checked':''}>${label}</label>`).join('')}</div>${periodPicker}</div></section>`;
   const heading=`<div class="page-heading"><div><h1>成果</h1></div></div>`;
   let range;try{range=reportRange(mode,period,start,end,selectedEntries);}catch(e){return heading+controls+`<p class="error" role="alert">${esc(e.message)}</p>`;}
   const full=calculate(selectedEntries),markets=stock?[stock.slice(0,2)]:['TW','US'].filter(m=>!selectedEntries.length||selectedEntries.some(e=>e.market===m));
@@ -26,7 +26,7 @@ export function resultView(u){
     const actual=`<div class="summary-grid">${metric('期間已實現損益',cash(report.realized,m),'依完整交易歷史配對成本，含費稅',report.realized)}${metric('期間實收股息',cash(report.dividend,m),'以實際入帳日期計入',report.dividend)}${metric('期間已售成本報酬率',report.cost?pct(report.realized/report.cost):'尚無賣出','已實現損益 ÷ 本期賣出配對成本',report.realized)}</div>`;
     const lifetime=`<details class="more"><summary>累計總報酬與計算基礎</summary><section class="lifetime-summary"><h3>自開始記錄以來 · 不隨月份篩選</h3><div class="summary-grid">${metric('累計總損益（含股息與庫存）',total.reason?'尚缺股價':cash(total.profit,m),esc(total.reason||'已實現 ＋ 未實現 ＋ 淨股息'),total.profit)}${metric('累計總報酬率（簡單報酬）',total.reason||total.rate===null?'—':pct(total.rate),'累計總損益 ÷ 歷次買入總支出；資金再投入會重計支出',total.rate)}</div></section><details class="more"><summary>${stock?'這檔股票':'此市場'}自開始記錄以來的年化</summary><p>${annual.reason?esc(annual.reason):annual.days>=365?`年化 XIRR <strong class="${tone(annual.rate)}">${pct(annual.rate)}</strong>`:`未滿一年：期間資金加權報酬 <strong class="${tone(annual.period)}">${pct(annual.period)}</strong>`}</p><p class="meta">此欄不隨期間篩選；${annual.start?`${esc(annual.start)} 至 ${esc(annual.end)}。`:''}僅股票部位，不含閒置現金或匯兌。${annual.quoteDates?.length?'估值股價日期 '+annual.quoteDates.map(esc).join('、'):''}</p></details></details>`;
     const rows=stock?`<details class="more"><summary>這段期間的操作紀錄（${report.rows.length} 筆）</summary>${report.rows.slice().reverse().map(e=>`<article class="record"><span class="meta">${esc(e.date)} · ${esc(u.accountName(e.account))}</span><strong>${esc(({buy:'買入',sell:'賣出',cash:'股息',stock:'配股',split:'分割'})[e.kind])} ${e.kind==='cash'?cash(e.amount,m):e.kind==='split'?'×'+e.factor:esc(e.quantity)+' 股'}</strong>${e.kind==='sell'?`<p class="${tone(e.pnl)}">已實現 ${cash(e.pnl,m)} · 此筆 ${pct(e.returnRate)}</p>`:''}<button class="text-link" type="button" data-edit="${esc(e.id)}">查看／修改</button></article>`).join('')||'<p class="empty">這段期間沒有操作紀錄；持股期間仍可能有漲跌。</p>'}</details>`:'';
-    return `<section class="panel results-panel"><h2>${stock?esc(name):m==='TW'?'台股 · 台幣':'美股 · 美元'}</h2>${stock?`<button class="text-link" type="button" data-review-stock="${esc(stock)}">查看這檔的買賣回顧 →</button>`:''}<p class="range-label">${range.start} — ${range.end}</p>${monthlyChart(selectedEntries,m,range.start,range.end,{esc,cash})}${specific}${stock?`<details class="more" open><summary>已實現與股息明細</summary>${actual}</details>`:actual}${metric('累計年化報酬率（XIRR）',annual.reason?'無法計算':pct(annual.rate),annual.reason?esc(annual.reason):annual.days<365?'未滿一年，屬短期年化外推；不代表未來報酬':'自開始記錄以來；股票部位，不含閒置現金／匯兌',annual.rate)}${lifetime}${m==='US'?`<details class="more"><summary>以目前匯率看台幣參考金額</summary>${u.fx?`<p>USD/TWD ${u.fx.rate} · ${esc(u.fx.quotedAt||u.fx.date)} · ${esc(u.fx.source||'手動匯率')}</p><p>目前持股市值 ${cash(annual.value*u.fx.rate,'TW')} · 累計美元總損益折台幣 ${total.reason?'尚缺股價':cash(total.profit*u.fx.rate,'TW')}</p><p class="meta">這只是美元金額乘目前參考匯率，不是含歷次換匯成本的台幣總報酬／年化；歷史換匯成本比較請看資產頁。不改動原幣報酬率。</p>`:'<p>請到資產頁設定永豐自動或手動估值匯率。</p>'}</details>`:''}${rows}</section>`;
+    return `<section class="panel results-panel"><h2>${stock?esc(name):m==='TW'?'台股 · 台幣':'美股 · 美元'}</h2>${stock?`<button class="text-link" type="button" data-review-stock="${esc(stock)}">查看這檔的買賣回顧 →</button>`:''}<p class="range-label">${range.start} — ${range.end}</p>${!stock&&mode==='month'?stockMonthChart(selectedEntries,m,range.start,range.end,{esc,cash}):monthlyChart(selectedEntries,m,range.start,range.end,{esc,cash})}${specific}${stock?`<details class="more" open><summary>已實現與股息明細</summary>${actual}</details>`:actual}${metric('累計年化報酬率（XIRR）',annual.reason?'無法計算':pct(annual.rate),annual.reason?esc(annual.reason):annual.days<365?'未滿一年，屬短期年化外推；不代表未來報酬':'自開始記錄以來；股票部位，不含閒置現金／匯兌',annual.rate)}${lifetime}${m==='US'?`<details class="more"><summary>以目前匯率看台幣參考金額</summary>${u.fx?`<p>USD/TWD ${u.fx.rate} · ${esc(u.fx.quotedAt||u.fx.date)} · ${esc(u.fx.source||'手動匯率')}</p><p>目前持股市值 ${cash(annual.value*u.fx.rate,'TW')} · 累計美元總損益折台幣 ${total.reason?'尚缺股價':cash(total.profit*u.fx.rate,'TW')}</p><p class="meta">這只是美元金額乘目前參考匯率，不是含歷次換匯成本的台幣總報酬／年化；歷史換匯成本比較請看資產頁。不改動原幣報酬率。</p>`:'<p>請到資產頁設定永豐自動或手動估值匯率。</p>'}</details>`:''}${rows}</section>`;
   }).join('');
   return heading+controls+contents+`<details class="panel"><summary>報酬率怎麼算？</summary><p><strong>累計總報酬率</strong>＝（累計已實現損益 ＋ 目前未實現損益 ＋ 累計淨股息）÷ 歷次買入總支出（含買進費稅）。例：投入 10,000、售出淨收 11,000、股息 200 且已清倉，總報酬 12%。買賣循環會重複計入投入，因此這是簡單累計報酬；比較不同投入時間的效率請看 XIRR，不平均各股百分比。</p><p>已售報酬率只計所選期間賣出的淨損益，除以其配對成本；期初已持有的股票仍沿用完整歷史加權成本，不會因篩選日期歸零。股息另外呈現。</p><p>個股區間資金加權報酬：期初持股以開始日前收盤價估值作負現金流，區間買入支出為負、賣出淨收入及淨股息為正，期末持股市值為正。先以實際日期及 365 日基礎計算 XIRR，再換算成有效現金流期間報酬（1 + XIRR）^(日數 / 365) − 1。它不是單純股價漲跌，也不是嚴格時間加權報酬。</p><p>起訖日的交易均計入；期初市值是起始日前一天收盤。清倉後不假設資金繼續投資，同日完成、無投入或多解風險時不提供單一 XIRR。缺少歷史估值不能用今日價格取代。分割／配股紀錄需補齊，否則股數與報酬會失真。</p><p>全部股票視圖分台幣／美元呈現；要看區間含庫存報酬，請先選一檔股票。合併帳戶仍各自配對成本，再合計現金流。</p><p><a href="https://help.portfolio-performance.info/en/concepts/performance/money-weighted/" target="_blank" rel="noopener noreferrer">資金加權報酬計算概念</a></p></details>`;
 }
@@ -62,10 +62,36 @@ return `<svg viewBox="0 0 ${w} 210" role="img" aria-label="每月損益柱狀圖
 }
 
 export function fitMonthlyCharts(root){
+for(const figure of root.querySelectorAll('.stock-month-chart')){
+  if(figure.dataset.bound)continue;figure.dataset.bound='1';
+  for(const button of figure.querySelectorAll('.stock-profit-column')){
+    const show=()=>{figure.querySelector('.stock-profit-readout').textContent=button.getAttribute('aria-label');for(const b of figure.querySelectorAll('.stock-profit-column'))b.setAttribute('aria-pressed',String(b===button));};
+    button.addEventListener('pointerenter',show);button.addEventListener('focus',show);button.addEventListener('click',show);
+  }
+}
 for(const figure of root.querySelectorAll('.monthly-chart[data-series]')){
 const plot=figure.querySelector('.monthly-plot'),width=Math.round(plot.getBoundingClientRect().width);
 if(!width||figure.dataset.chartWidth===String(width))continue;
 plot.innerHTML=monthlyChartSvg(JSON.parse(figure.dataset.series),width,figure.dataset.market);
 figure.dataset.chartWidth=String(width);
 }
+}
+export function stockMonthSeries(entries,market,start,end){
+  const stocks=new Map();
+  for(const e of calculate(entries).results){
+    if(e.market!==market||!e.symbol||e.date<start||e.date>end)continue;
+    if(!stocks.has(e.symbol))stocks.set(e.symbol,{symbol:e.symbol,name:e.name||e.symbol,amount:0,realized:0,dividend:0});
+    const r=stocks.get(e.symbol);
+    if(e.kind==='sell')r.realized+=e.pnl;
+    if(e.kind==='cash')r.dividend+=e.amount;
+    r.amount=r.realized+r.dividend;
+  }
+  return [...stocks.values()].sort((a,b)=>a.amount-b.amount||a.symbol.localeCompare(b.symbol,'en'));
+}
+export function stockMonthChart(entries,market,start,end,{esc,cash}){
+  const series=stockMonthSeries(entries,market,start,end);
+  if(!series.length)return '<p class="empty">這個月沒有股票交易或股利紀錄。</p>';
+  const lo=Math.min(0,...series.map(r=>r.amount)),hi=Math.max(0,...series.map(r=>r.amount)),span=hi-lo||1;
+  const zero=hi===lo?50:hi/span*100;
+  return `<figure class="stock-month-chart"><figcaption>本月各股獲利 <small>已實現＋淨股利 · ${market==='US'?'美元':'台幣'} · 由低到高</small></figcaption><output class="stock-profit-readout" aria-live="polite">點選柱子查看股票與金額</output><div class="stock-profit-scroll"><div class="stock-profit-columns" style="grid-template-columns:repeat(${series.length},minmax(62px,1fr));--profit-zero:${zero}%">${series.map(r=>{const top=r.amount>=0?zero-r.amount/span*100:zero,height=Math.abs(r.amount)/span*100;const label=`${r.symbol} ${r.name}：${cash(r.amount,market)}（已實現 ${cash(r.realized,market)}＋淨股利 ${cash(r.dividend,market)}）`;return `<button type="button" class="stock-profit-column" aria-pressed="false" aria-label="${esc(label)}" title="${esc(label)}"><span class="stock-profit-track"><span class="stock-profit-bar ${r.amount<0?'negative':r.amount>0?'positive':'neutral'}" style="top:${top}%;height:${height}%"></span></span><span class="stock-profit-symbol">${esc(r.symbol)}</span></button>`;}).join('')}</div></div><p class="meta">每檔一根，最右邊獲利最高；可左右滑動。僅買入而未賣出／領息者為 0，不代表沒有未實現漲跌。</p></figure>`;
 }
