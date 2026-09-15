@@ -135,6 +135,7 @@ export function validate(b){
   const accounts=records(b.accounts,'帳戶');if(!accounts.size)throw Error('至少需要一個帳戶');const brokers=records(b.brokers,'券商');
   records(b.entries,'交易紀錄');records(b.assets,'資產');records(b.classes,'股票分類');records(b.history,'變更紀錄');
   if(!b.settings||!accounts.has(b.settings.account)||!b.settings.tax||!b.settings.targets)throw Error('設定不完整');
+  const memos=b.settings.allocationMemos;if(memos!==undefined&&(!memos||typeof memos!=='object'||Array.isArray(memos)||Object.entries(memos).some(([k,v])=>!['stocks','assets'].includes(k)||typeof v!=='string'||!v.trim()||v.length>2000)))throw Error('配置備忘格式無效');
   const categories=records(b.settings.categories,'分類設定');
   if(b.settings.feeReviewBrokers!==undefined&&(!Array.isArray(b.settings.feeReviewBrokers)||b.settings.feeReviewBrokers.some(id=>typeof id!=='string'||!brokers.has(id))))throw Error('費稅差異提醒設定無效');
   if(b.settings.feeReviewEntryIds!==undefined){const targets=b.settings.feeReviewEntryIds;if(!targets||typeof targets!=='object'||Array.isArray(targets)||Object.entries(targets).some(([id,ids])=>!brokers.has(id)||!Array.isArray(ids)||ids.some(value=>typeof value!=='string')))throw Error('費稅檢查範圍無效');}
@@ -245,4 +246,8 @@ export function costComparison(entries,state,options={}){
     if(Number.isFinite(netAt(high))&&netAt(high)>=needed){for(let i=0;i<70;i++){const mid=(low+high)/2;if(netAt(mid)>=needed)high=mid;else low=mid;}breakeven=high;}
   }
   return {rows,cycle:{total,invested,rate:invested&&total!==null?total/invested:null,breakeven,hasHolding:!!held.length}};
+}
+export function saveAllocationMemo(state,kind,text){
+  if(!['stocks','assets'].includes(kind)||typeof text!=='string'||!text.trim()||text.trim().length>2000)throw Error('請填寫 1～2000 字的配置備忘');
+  state.settings.allocationMemos={...state.settings.allocationMemos,[kind]:text.trim()};
 }
