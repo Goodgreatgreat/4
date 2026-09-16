@@ -98,9 +98,9 @@ export function estimatePortfolioSale(positions,state,{market='mixed',catalog={}
   if(!Number.isFinite(cost)||!Number.isFinite(pnl))return {reason:'試算金額超出範圍',cost:null,pnl:null,rate:null};
   return {cost,pnl,rate:cost>0?pnl/cost:null};
 }
-export function calculate(entries,method='average'){
+export function calculate(entries,method='fifo'){
   if(!['average','fifo'].includes(method))throw Error('未知成本算法');
-  const lots=new Map();
+  const lots=new Map(),cycles=new Map();
   const holdings=new Map(),fx=new Map(),results=[];
   for(const e of ordered(entries)){
     day(e.date);const r={...e,cash:0,pnl:0,allocated:0,dividend:0,returnRate:null};
@@ -111,18 +111,19 @@ export function calculate(entries,method='average'){
       else{if(p.usd<=0||e.usd>p.usd*(1+1e-12))throw Error('這個帳戶的換匯紀錄美元不足；請先補齊先前買匯');if(e.fee>=e.twd)throw Error('換匯費用不可超過收入');r.allocated=p.cost/p.usd*Math.min(e.usd,p.usd);r.pnl=e.twd-e.fee-r.allocated;r.actualRate=(e.twd-e.fee)/e.usd;p.usd-=e.usd;p.cost-=r.allocated;p.realized+=r.pnl;}
       if(e.kind==='fxsell'&&Math.abs(p.usd)<=e.usd*1e-12){p.usd=0;p.cost=0;}for(const v of [p.usd,p.cost,p.realized,r.actualRate,r.pnl])if(!Number.isFinite(v))throw Error('換匯計算超出可處理範圍');fx.set(e.account,p);results.push(r);continue;
     }
-    const k=key(e);if(!lots.has(k))lots.set(k,[]);const queue=lots.get(k);const p=holdings.get(k)||{account:e.account,market:e.market,symbol:e.symbol,name:e.name||e.symbol,quantity:0,cost:0,realized:0,dividend:0,fees:0,lastDividend:null};
+    const k=key(e);if(!lots.has(k))lots.set(k,[]);const queue=lots.get(k);if(!cycles.has(k))cycles.set(k,{cost:0,quantity:0});let cycle=cycles.get(k);const p=holdings.get(k)||{account:e.account,market:e.market,symbol:e.symbol,name:e.name||e.symbol,quantity:0,cost:0,realized:0,dividend:0,fees:0,lastDividend:null};
     if(e.kind==='buy'||e.kind==='sell'){
       const gross=positive(e.price,'成交價')*positive(e.quantity,'股數');number(e.fee,'手續費');number(e.tax,'稅費');
-      if(e.kind==='buy'){p.cost+=gross+e.fee+e.tax;p.quantity+=e.quantity;queue.push({quantity:e.quantity,cost:gross+e.fee+e.tax});r.cash=-gross-e.fee-e.tax;}
+      if(e.kind==='buy'){if(p.quantity===0){queue.length=0;cycle={cost:0,quantity:0};cycles.set(k,cycle);}cycle.cost+=gross+e.fee+e.tax;cycle.quantity+=e.quantity;p.cost+=gross+e.fee+e.tax;p.quantity+=e.quantity;queue.push({quantity:e.quantity,cost:gross+e.fee+e.tax});r.cash=-gross-e.fee-e.tax;}
       else{if(p.quantity<=0||e.quantity>p.quantity*(1+1e-12))throw Error(`${e.symbol} 在 ${e.date} 此帳戶僅有 ${p.quantity} 股，不能賣出 ${e.quantity} 股`);r.allocated=p.cost/p.quantity*Math.min(e.quantity,p.quantity);if(method==='fifo'){let remaining=Math.min(e.quantity,p.quantity);r.allocated=0;while(remaining>0&&queue.length){const lot=queue[0],n=Math.min(remaining,lot.quantity),c=lot.cost*n/lot.quantity;r.allocated+=c;lot.quantity-=n;lot.cost-=c;remaining-=n;if(lot.quantity<=0)queue.shift();}}r.cash=gross-e.fee-e.tax;r.pnl=r.cash-r.allocated;r.returnRate=r.allocated?r.pnl/r.allocated:null;p.quantity-=e.quantity;p.cost-=r.allocated;p.realized+=r.pnl;}
       p.fees+=e.fee+e.tax;
     }else if(e.kind==='cash'){r.cash=positive(e.amount,'實收股息');r.dividend=e.amount;p.dividend+=e.amount;p.lastDividend=e.date;}
-    else if(e.kind==='stock'){const added=positive(e.quantity,'配股股數');if(method==='fifo'){if(p.quantity>0){const factor=(p.quantity+added)/p.quantity;for(const lot of queue)lot.quantity*=factor;}else queue.push({quantity:added,cost:0});}p.quantity+=added;p.lastDividend=e.date;}
-    else if(e.kind==='split'){if(p.quantity<=0)throw Error('分割生效前沒有持股，請核對帳戶與日期');p.quantity*=positive(e.factor,'分割比例');if(method==='fifo')for(const lot of queue)lot.quantity*=e.factor;}
+    else if(e.kind==='stock'){if(p.quantity===0){cycle={cost:0,quantity:0};cycles.set(k,cycle);}const added=positive(e.quantity,'配股股數');if(method==='fifo'){if(p.quantity>0){const factor=(p.quantity+added)/p.quantity;for(const lot of queue)lot.quantity*=factor;}else queue.push({quantity:added,cost:0});}cycle.quantity+=added;p.quantity+=added;p.lastDividend=e.date;}
+    else if(e.kind==='split'){if(p.quantity<=0)throw Error('分割生效前沒有持股，請核對帳戶與日期');cycle.quantity*=positive(e.factor,'分割比例');p.quantity*=e.factor;if(method==='fifo')for(const lot of queue)lot.quantity*=e.factor;}
     else throw Error('無法辨識紀錄種類');
-    if(e.kind==='sell'&&Math.abs(p.quantity)<=e.quantity*1e-12){p.quantity=0;p.cost=0;}
+    if(e.kind==='sell'&&Math.abs(p.quantity)<=e.quantity*1e-12){p.quantity=0;p.cost=0;queue.length=0;}
     for(const v of [p.quantity,p.cost,p.realized,p.dividend,r.cash,r.pnl,r.allocated])if(!Number.isFinite(v))throw Error('計算超出可處理範圍，請核對金額與股數');
+    r.cycleAverage=cycle.quantity?cycle.cost/cycle.quantity:0;r.cycleCost=cycle.cost;r.cycleQuantity=cycle.quantity;
     r.afterQuantity=p.quantity;r.afterCost=p.cost;r.average=p.quantity?p.cost/p.quantity:0;
     p.name=e.name||p.name;holdings.set(k,p);results.push(r);
   }
@@ -216,7 +217,7 @@ export function classifyPurchase(b,e){
   if(old){if(e.category)old.category=e.category;return;}
   b.classes.push({id:uid(),account:e.account,market:e.market,symbol:e.symbol,category:e.category||'',bucket:e.assetType==='bond'?'債券':e.market==='TW'?'台股':'美股'});
 }
-// Comparison only: the saved ledger and the primary average-cost reports are unchanged.
+// FIFO is primary; average cost remains an explicit comparison only.
 export function costComparison(entries,state,options={}){
   state={...state,entries};
   const markets=new Set(entries.filter(e=>e.market).map(e=>e.market));

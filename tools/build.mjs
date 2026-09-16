@@ -2,6 +2,7 @@ import {mkdir,readFile,writeFile,copyFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
+import {RELEASE_SUMMARY,validReleaseSummary} from '../updates.js';
 import {checkFx} from '../fx.js';
 import {checkCatalog} from '../network.js';
 const files=['index.html','ui.css','main.js','updates.js','update.html','update-page.js','update-utils.js','book.js','cash.js','period.js','results.js','trade-chart.js','network.js','quote-status.js','fx.js','symbols.js','panels.js','offline.js','mark.svg','manifest.json','data/taiwan.json','data/fx.json'];
@@ -10,6 +11,7 @@ checkCatalog(JSON.parse(await readFile(new URL('data/taiwan.json',root),'utf8'))
 for(const f of files.filter(f=>f.endsWith('.js')))execFileSync(process.execPath,['--check',fileURLToPath(new URL(f,root))],{stdio:'inherit'});
 const fx=JSON.parse(await readFile(new URL('data/fx.json',root),'utf8'));if(fx.status!=='unavailable')checkFx(fx);
 const html=await readFile(new URL('index.html',root),'utf8'),pkg=JSON.parse(await readFile(new URL('package.json',root),'utf8'));
+const releaseSource=await readFile(new URL('updates.js',root),'utf8');const releaseMatch=releaseSource.match(/export const RELEASE_SUMMARY=(\{[^\r\n]+\});/);if(!validReleaseSummary(RELEASE_SUMMARY)||RELEASE_SUMMARY.version!==pkg.version||!releaseMatch||JSON.stringify(JSON.parse(releaseMatch[1]))!==JSON.stringify(RELEASE_SUMMARY))throw Error('更新條列摘要與版本不一致');
 if(!html.includes('慢慢記 '+pkg.version))throw Error('首頁與程式版本不一致');
 for(const f of files)await readFile(new URL(f,root));
 if(process.argv.includes('--check')){console.log('發布檢查通過：網站檔案、程式語法、行情格式與版本一致。');process.exit(0);}

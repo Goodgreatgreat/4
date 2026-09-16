@@ -1,13 +1,21 @@
 // Application updates never clear accounting storage or reload an unfinished form.
 export async function installUpdates({notify,approve}){
-  showReleaseSummary();
   if(!['https:','http:'].includes(location.protocol)||!('serviceWorker' in navigator))return;
   const banner=document.querySelector('#update-banner'),button=document.querySelector('#apply-update');
   const hadController=!!navigator.serviceWorker.controller;
   let requested=false,lastCheck=0;
   try{
     const registration=await navigator.serviceWorker.register('./offline.js',{updateViaCache:'none'});
-    const show=()=>{banner.hidden=false;};
+    let shownWorker=null;
+    const show=async()=>{
+      const worker=registration.waiting||navigator.serviceWorker.controller;
+      if(!worker)return;
+      shownWorker=worker;banner.hidden=false;
+      renderUpdateSummary(banner,null);
+      const summary=await requestUpdateSummary(worker);
+      if(shownWorker!==worker||(registration.waiting||navigator.serviceWorker.controller)!==worker)return;
+      renderUpdateSummary(banner,summary);
+    };
     if(registration.waiting)show();
     registration.addEventListener('updatefound',()=>{
       const worker=registration.installing;
@@ -33,15 +41,26 @@ export async function installUpdates({notify,approve}){
     void check();
   }catch{notify('暫時無法啟用離線更新；連網記帳仍可使用。');}
 }
-export const RELEASE_SUMMARY={version:'1.4.23',text:'重新分清股票風格與投資工具、資產股債現金兩篇文章；加入需要／能力／意願，各篇文末附來源，股票新預設改核心／自選示例，自訂不變。'};
-export function showReleaseSummary(){
-  const key='slow-notebook-release:'+new URL('.',location.href).pathname;
-  try{if(localStorage.getItem(key)===RELEASE_SUMMARY.version)return;}catch{}
-  if(document.querySelector('#release-summary'))return;
-  const box=document.createElement('section');box.id='release-summary';box.className='panel';box.setAttribute('aria-label','本次更新');
-  const title=document.createElement('strong');title.textContent='已更新 '+RELEASE_SUMMARY.version;
-  const text=document.createElement('p');text.textContent=RELEASE_SUMMARY.text;
-  const close=document.createElement('button');close.type='button';close.className='text-link';close.textContent='知道了';
-  close.addEventListener('click',()=>{box.remove();try{localStorage.setItem(key,RELEASE_SUMMARY.version);}catch{}});
-  box.append(title,text,close);document.querySelector('main')?.before(box);
+export const RELEASE_SUMMARY={"version":"1.4.25","items":["成果可依股票分類查看，買入不再列入獲利圖。","股票賣出損益改用先進先出，舊交易依完整歷史重新計算。","交易紀錄另列本輪平均買入成本作參考；原始成交與實付費稅不變。"]};
+export function validReleaseSummary(value){
+  return !!value&&/^\d+\.\d+\.\d+$/.test(value.version)&&Array.isArray(value.items)&&value.items.length>0&&value.items.length<=8&&value.items.every(s=>typeof s==='string'&&s.trim()&&s.length<=200);
+}
+export function requestUpdateSummary(worker){
+  return new Promise(resolve=>{
+    const channel=new MessageChannel();let timer;
+    const finish=value=>{clearTimeout(timer);channel.port1.close();channel.port2.close();resolve(value);};
+    timer=setTimeout(()=>finish(null),3000);
+    channel.port1.onmessage=e=>finish(validReleaseSummary(e.data)?e.data:null);
+    try{worker.postMessage({type:'GET_RELEASE_SUMMARY'},[channel.port2]);}catch{finish(null);}
+  });
+}
+export function renderUpdateSummary(banner,summary){
+  let box=banner.querySelector('.update-description');
+  if(!box){box=document.createElement('div');box.className='update-description';banner.querySelector('span')?.remove();banner.prepend(box);}
+  box.replaceChildren();
+  const title=document.createElement('strong');title.textContent=summary?'新版 '+summary.version+'：這次更新':'有新版程式';
+  box.append(title);
+  if(summary){const list=document.createElement('ul');for(const item of summary.items){const li=document.createElement('li');li.textContent=item;list.append(li);}box.append(list);}
+  else{const p=document.createElement('p');p.textContent='暫時無法讀取新版說明；不以舊版內容代替。';box.append(p);}
+  const note=document.createElement('p');note.textContent='請先儲存正在輸入的內容，再按「套用新版」。';box.append(note);
 }
