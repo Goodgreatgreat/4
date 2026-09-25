@@ -5,7 +5,7 @@ import {fileURLToPath} from 'node:url';
 import {RELEASE_SUMMARY,validReleaseSummary} from '../updates.js';
 import {checkFx} from '../fx.js';
 import {checkCatalog} from '../network.js';
-const files=['index.html','ui.css','main.js','updates.js','update.html','update-page.js','update-utils.js','book.js','cash.js','period.js','results.js','trade-chart.js','network.js','quote-status.js','fx.js','symbols.js','panels.js','offline.js','mark.svg','manifest.json','data/taiwan.json','data/fx.json'];
+const files=['index.html','ui.css','main.js','swing.js','swing-ui.js','position-sizing.js','position-sizing-ui.js','updates.js','update.html','update-page.js','update-utils.js','book.js','cash.js','period.js','results.js','trade-chart.js','network.js','quote-status.js','fx.js','symbols.js','panels.js','offline.js','mark.svg','manifest.json','data/taiwan.json','data/fx.json'];
 const root=new URL('../',import.meta.url),out=new URL('../dist/',import.meta.url);
 checkCatalog(JSON.parse(await readFile(new URL('data/taiwan.json',root),'utf8')));
 for(const f of files.filter(f=>f.endsWith('.js')))execFileSync(process.execPath,['--check',fileURLToPath(new URL(f,root))],{stdio:'inherit'});

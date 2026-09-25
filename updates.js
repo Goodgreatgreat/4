@@ -41,7 +41,7 @@ export async function installUpdates({notify,approve}){
     void check();
   }catch{notify('暫時無法啟用離線更新；連網記帳仍可使用。');}
 }
-export const RELEASE_SUMMARY={"version":"1.4.25","items":["成果可依股票分類查看，買入不再列入獲利圖。","股票賣出損益改用先進先出，舊交易依完整歷史重新計算。","交易紀錄另列本輪平均買入成本作參考；原始成交與實付費稅不變。"]};
+export const RELEASE_SUMMARY={"version":"1.4.28","items":["新增選用波段記事本，計算 1.5R 分批目標、費後保本與餘股停損。","設定可啟用或關閉；日收盤顯示 R 提示，計畫隨帳本備份，不會自動下單。"]};
 export function validReleaseSummary(value){
   return !!value&&/^\d+\.\d+\.\d+$/.test(value.version)&&Array.isArray(value.items)&&value.items.length>0&&value.items.length<=8&&value.items.every(s=>typeof s==='string'&&s.trim()&&s.length<=200);
 }

@@ -1,3 +1,4 @@
+import {validateSwing} from './swing.js';
 import {validateCash} from './cash.js';
 // Independent accounting model for 慢慢記. All rates below are decimal ratios.
 export const FORMAT='slow-stock-notebook';
@@ -136,6 +137,7 @@ export function validate(b){
   const accounts=records(b.accounts,'帳戶');if(!accounts.size)throw Error('至少需要一個帳戶');const brokers=records(b.brokers,'券商');
   records(b.entries,'交易紀錄');records(b.assets,'資產');records(b.classes,'股票分類');records(b.history,'變更紀錄');
   if(!b.settings||!accounts.has(b.settings.account)||!b.settings.tax||!b.settings.targets)throw Error('設定不完整');
+  validateSwing(b.settings.swing);
   const memos=b.settings.allocationMemos;if(memos!==undefined&&(!memos||typeof memos!=='object'||Array.isArray(memos)||Object.entries(memos).some(([k,v])=>!['stocks','assets'].includes(k)||typeof v!=='string'||!v.trim()||v.length>2000)))throw Error('配置備忘格式無效');
   const categories=records(b.settings.categories,'分類設定');
   if(b.settings.feeReviewBrokers!==undefined&&(!Array.isArray(b.settings.feeReviewBrokers)||b.settings.feeReviewBrokers.some(id=>typeof id!=='string'||!brokers.has(id))))throw Error('費稅差異提醒設定無效');
@@ -165,7 +167,7 @@ export function validate(b){
   validateCash(b);calculate(b.entries);return b;
 }
 export function pruneUnusedDefaults(b){
-  const refs=JSON.stringify({entries:b.entries,assets:b.assets,classes:b.classes,history:b.history,cashOpenings:b.cashOpenings,cashMovements:b.cashMovements});
+  const refs=JSON.stringify({entries:b.entries,assets:b.assets,classes:b.classes,history:b.history,swing:b.settings.swing,cashOpenings:b.cashOpenings,cashMovements:b.cashMovements});
   const old=b.accounts.find(a=>a.id==='main'&&a.name==='我的帳戶');
   if(old&&b.accounts.length>1&&b.settings.account!==old.id&&!refs.includes(JSON.stringify(old.id)))b.accounts=b.accounts.filter(a=>a!==old);
   const broker=b.brokers.find(a=>a.id==='standard'&&a.name==='我的常用券商');
