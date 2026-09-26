@@ -41,7 +41,7 @@ export async function installUpdates({notify,approve}){
     void check();
   }catch{notify('暫時無法啟用離線更新；連網記帳仍可使用。');}
 }
-export const RELEASE_SUMMARY={"version":"1.4.28","items":["新增選用波段記事本，計算 1.5R 分批目標、費後保本與餘股停損。","設定可啟用或關閉；日收盤顯示 R 提示，計畫隨帳本備份，不會自動下單。"]};
+export const RELEASE_SUMMARY={"version":"1.4.31","items":["新增分批波段管理：逐筆買賣、鎖定原始 R、保本與最高價追蹤。","分開記錄計畫停損與券商已設定停損，提示價格及股數差異；保留操作歷程與撤回。"]};
 export function validReleaseSummary(value){
   return !!value&&/^\d+\.\d+\.\d+$/.test(value.version)&&Array.isArray(value.items)&&value.items.length>0&&value.items.length<=8&&value.items.every(s=>typeof s==='string'&&s.trim()&&s.length<=200);
 }

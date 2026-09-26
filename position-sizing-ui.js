@@ -12,7 +12,7 @@ function select(name,label,choices,value){
 }
 function profile(state,brokerId){
   const broker=state.brokers.find(b=>b.id===brokerId)||state.brokers[0];
-  return {broker,feeRate:Number((broker.tw.rate*broker.tw.discount*100).toPrecision(12)),minimumFee:broker.tw.min,sellTaxRate:Number((state.settings.tax.stock*100).toPrecision(12)),feeRounding:broker.tw.round,taxRounding:broker.tw.taxRound||'round'};
+  return {broker,feeRate:Number((broker.tw.rate*broker.tw.discount*100).toPrecision(12)),minimumFee:broker.tw.min,sellTaxRate:Number((state.settings.tax.stock*100).toPrecision(12)),feeRounding:broker.tw.round,taxRounding:broker.tw.taxRound||broker.tw.round};
 }
 export function positionSizingContent(state,brokerId){
   const p=profile(state,brokerId),rounds=[['round','四捨五入至元'],['floor','無條件捨去至元'],['ceil','無條件進位至元']];

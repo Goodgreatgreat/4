@@ -1,3 +1,5 @@
+import {roundTwd,taxRounding} from './tw-fees.js';
+export {roundTwd} from './tw-fees.js';
 import {validateSwing} from './swing.js';
 import {validateCash} from './cash.js';
 // Independent accounting model for 慢慢記. All rates below are decimal ratios.
@@ -12,7 +14,6 @@ export function key(r){return JSON.stringify([r.account,r.market,r.symbol]);}
 export function quoteKey(r){return `${r.market}:${r.symbol}`;}
 export const moneyRound=(n,d=2)=>Math.round((n+Number.EPSILON)*10**d)/10**d;
 export function emptyBook(){return {format:FORMAT,version:1,revision:0,entries:[],assets:[],classes:[],history:[],quotes:{},accounts:[{id:'main',name:'我的帳戶',broker:'standard'}],brokers:[{id:'standard',name:'我的常用券商',tw:{rate:0.001425,discount:1,min:20,round:'round'},us:{mode:'fixed',rate:0,min:0,extra:0,perShare:0,sellRate:0,sellShare:0,sellMin:0}}],settings:{account:'main',tax:{stock:.003,etf:.001,day:.0015},categories:[{id:'long',name:'長期持有'},{id:'income',name:'存股領息'},{id:'flex',name:'靈活操作'}],targets:{},tolerance:5,fx:null,monthlySeen:'',plans:{TW:{},US:{}}}};}
-export function roundTwd(value,mode='round'){const nearest=Math.round(value),n=Math.abs(value-nearest)<1e-8?nearest:value;return (mode==='floor'?Math.floor:mode==='ceil'?Math.ceil:Math.round)(n);}
 export function charges(entry,broker,tax){
   const gross=positive(entry.price,'成交價')*positive(entry.quantity,'股數');
   let fee=0,levy=0;
@@ -21,7 +22,7 @@ export function charges(entry,broker,tax){
     let rate=tax[entry.assetType]??tax.stock;
     if(entry.assetType==='bond')rate=entry.date>='2017-01-01'&&entry.date<='2026-12-31'?0:tax.etf;
     if(entry.assetType==='day'&&(entry.date<'2017-04-28'||entry.date>'2027-12-31'))rate=tax.stock;
-    levy=entry.kind==='sell'?roundTwd(gross*rate,b.taxRound||'round'):0;
+    levy=entry.kind==='sell'?roundTwd(gross*rate,taxRounding(b)):0;
   }else{
     const b=broker.us;const base=b.mode==='share'?entry.quantity*b.rate:b.mode==='percent'?gross*b.rate:b.rate;
     fee=moneyRound(Math.max(base,b.min)+b.extra+entry.quantity*b.perShare);

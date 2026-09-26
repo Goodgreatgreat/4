@@ -18,7 +18,7 @@ export function realizedReport(entries,stock,start,end){
   day(start);day(end);if(start>end)throw Error('日期範圍無效');
   const b=calculate(entries.filter(e=>!e.kind.startsWith('fx')&&(!stock||quoteKey(e)===stock)&&e.date<=end));
   const rows=b.results.filter(e=>e.date>=start);
-  return {book:b,rows,realized:rows.reduce((s,e)=>s+e.pnl,0),dividend:rows.reduce((s,e)=>s+e.dividend,0),cost:rows.reduce((s,e)=>s+e.allocated,0)};
+  return {book:b,rows,tradeCount:rows.filter(e=>e.kind==='sell').length,realized:rows.reduce((s,e)=>s+e.pnl,0),dividend:rows.reduce((s,e)=>s+e.dividend,0),cost:rows.reduce((s,e)=>s+e.allocated,0)};
 }
 // Start = the beginning of the selected day, end = the end of the selected day.
 // Costs always use full history; start/end prices value shares at the boundaries.
