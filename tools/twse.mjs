@@ -1,5 +1,5 @@
 import {day} from '../book.js';
-import {validSymbol} from '../symbols.js';
+import {validSymbol} from '../network.js';
 export function parseTwseDaily(data,date){
   day(date);
   if(data?.stat!=='OK'||data.date!==date.replaceAll('-',''))throw Error('證交所當日收盤表尚未公布');

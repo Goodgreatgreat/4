@@ -1,4 +1,4 @@
-import {clearAppShell} from './update-utils.js';
+import {clearAppShell} from './updates.js';
 const button=document.querySelector('#repair-update'),status=document.querySelector('#repair-status');
 if(!['http:','https:'].includes(location.protocol)){button.disabled=true;}
 else{

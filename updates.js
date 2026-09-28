@@ -41,7 +41,7 @@ export async function installUpdates({notify,approve}){
     void check();
   }catch{notify('暫時無法啟用離線更新；連網記帳仍可使用。');}
 }
-export const RELEASE_SUMMARY={"version":"1.4.31","items":["新增分批波段管理：逐筆買賣、鎖定原始 R、保本與最高價追蹤。","分開記錄計畫停損與券商已設定停損，提示價格及股數差異；保留操作歷程與撤回。"]};
+export const RELEASE_SUMMARY={"version":"1.4.32","items":["合併波段、股數試算、行情與更新工具，減少上傳檔案。","原有記帳、行情、波段功能及本機帳本格式保留。"]};
 export function validReleaseSummary(value){
   return !!value&&/^\d+\.\d+\.\d+$/.test(value.version)&&Array.isArray(value.items)&&value.items.length>0&&value.items.length<=8&&value.items.every(s=>typeof s==='string'&&s.trim()&&s.length<=200);
 }
@@ -63,4 +63,27 @@ export function renderUpdateSummary(banner,summary){
   if(summary){const list=document.createElement('ul');for(const item of summary.items){const li=document.createElement('li');li.textContent=item;list.append(li);}box.append(list);}
   else{const p=document.createElement('p');p.textContent='暫時無法讀取新版說明；不以舊版內容代替。';box.append(p);}
   const note=document.createElement('p');note.textContent='請先儲存正在輸入的內容，再按「套用新版」。';box.append(note);
+}
+
+// Shared GitHub origin can contain other repositories: never clear origin-wide storage.
+export async function clearAppShell(baseUrl,cacheStorage,workers){
+  const base=new URL(baseUrl),within=value=>{try{const u=new URL(value);return u.origin===base.origin&&u.pathname.startsWith(base.pathname);}catch{return false;}};
+  if(workers){
+    for(const registration of await workers.getRegistrations()){
+      if(registration.scope!==base.href)continue;
+      const script=registration.active?.scriptURL||registration.waiting?.scriptURL||registration.installing?.scriptURL;
+      if(script&&within(script)&&['offline.js','sw.js'].includes(new URL(script).pathname.split('/').at(-1)))await registration.unregister();
+    }
+  }
+  if(!cacheStorage)return;
+  const scopedPrefix='slow-notebook-shell-'+base.href;
+  const legacyFiles=new Set(['','index.html','app.js','ledger.js','storage.js','performance.js','tiingo.js','tw-quotes.js','styles.css','icon.svg','manifest.webmanifest','data/tw-quotes.json']);
+  for(const name of await cacheStorage.keys()){
+    if(name.startsWith(scopedPrefix)&&/^[a-zA-Z0-9-]+$/.test(name.slice(scopedPrefix.length)))await cacheStorage.delete(name);
+    else if(name.startsWith('stock-journal-shell-')){
+      const cache=await cacheStorage.open(name);
+      for(const request of await cache.keys())if(within(request.url)&&legacyFiles.has(new URL(request.url).pathname.slice(base.pathname.length)))await cache.delete(request);
+      if(!(await cache.keys()).length)await cacheStorage.delete(name);
+    }
+  }
 }

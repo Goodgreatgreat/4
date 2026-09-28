@@ -1,5 +1,5 @@
 import {writeFile,readFile,mkdir} from 'node:fs/promises';
-import {SINOPAC_URL,parseSinopac,checkFx} from '../fx.js';
+import {SINOPAC_URL,parseSinopac,checkFx} from '../network.js';
 const file=new URL('../data/fx.json',import.meta.url);
 try{
   const response=await fetch(SINOPAC_URL,{signal:AbortSignal.timeout(20000)});

@@ -2,7 +2,7 @@ import {today} from '../book.js';
 import {parseTwseDaily} from './twse.mjs';
 import {mkdir,writeFile,readFile} from 'node:fs/promises';
 import {checkCatalog} from '../network.js';
-import {checkFx} from '../fx.js';
+import {checkFx} from '../network.js';
 import {parseMarket,mergeQuotes} from './quote-merge.mjs';
 const root=new URL('../data/taiwan.json',import.meta.url);
 const urls={TWSE:'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL',TPEx:'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes',bonds:'https://info.tpex.org.tw/api/etfFilter?assetType=bond&etfStrategy=passive&rewardType=Vanilla',TWSE_DAILY:'https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?response=json&type=ALLBUT0999&date='+today().replaceAll('-','')};
