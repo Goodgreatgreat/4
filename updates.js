@@ -41,7 +41,7 @@ export async function installUpdates({notify,approve}){
     void check();
   }catch{notify('暫時無法啟用離線更新；連網記帳仍可使用。');}
 }
-export const RELEASE_SUMMARY={"version":"1.4.32","items":["合併波段、股數試算、行情與更新工具，減少上傳檔案。","原有記帳、行情、波段功能及本機帳本格式保留。"]};
+export const RELEASE_SUMMARY={"version":"1.4.34","items":["波段功能移到「我的股票」最下方，放在交易回顧之後。","保留舊買賣費稅差異比對與逐項校正。"]};
 export function validReleaseSummary(value){
   return !!value&&/^\d+\.\d+\.\d+$/.test(value.version)&&Array.isArray(value.items)&&value.items.length>0&&value.items.length<=8&&value.items.every(s=>typeof s==='string'&&s.trim()&&s.length<=200);
 }
