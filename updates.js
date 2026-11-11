@@ -41,7 +41,7 @@ export async function installUpdates({notify,approve}){
     void check();
   }catch{notify('暫時無法啟用離線更新；連網記帳仍可使用。');}
 }
-export const RELEASE_SUMMARY={"version":"1.4.34","items":["波段功能移到「我的股票」最下方，放在交易回顧之後。","保留舊買賣費稅差異比對與逐項校正。"]};
+export const RELEASE_SUMMARY={"version":"1.4.37","items":["我的股票直接顯示股數，依單日費稅後損益排序。","台股券商可設定賣出成交總額捨去，舊帳可批次重算並保留實付費稅。","設定與備份可將每月股票現金流與市值傳到現金流工具。"]};
 export function validReleaseSummary(value){
   return !!value&&/^\d+\.\d+\.\d+$/.test(value.version)&&Array.isArray(value.items)&&value.items.length>0&&value.items.length<=8&&value.items.every(s=>typeof s==='string'&&s.trim()&&s.length<=200);
 }
